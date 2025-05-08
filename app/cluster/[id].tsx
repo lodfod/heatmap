@@ -32,6 +32,7 @@ const mockClusters: Record<
       location: string;
       imageUrl: string;
       attendees: number;
+      isAttending?: boolean; // New property to track if the user is attending
     }[];
   }
 > = {
@@ -49,6 +50,7 @@ const mockClusters: Record<
         imageUrl:
           "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
         attendees: 42,
+        isAttending: true,
       },
       {
         id: "4",
@@ -67,6 +69,7 @@ const mockClusters: Record<
         imageUrl:
           "https://images.unsplash.com/photo-1518407613690-d9fc990e795f",
         attendees: 34,
+        isAttending: true,
       },
     ],
   },
@@ -84,6 +87,7 @@ const mockClusters: Record<
         imageUrl:
           "https://images.unsplash.com/photo-1517048676732-d65bc937f952",
         attendees: 24,
+        isAttending: true,
       },
       {
         id: "104",
@@ -118,6 +122,7 @@ const mockClusters: Record<
         imageUrl:
           "https://images.unsplash.com/photo-1528605248644-14dd04022da1",
         attendees: 31,
+        isAttending: true,
       },
       {
         id: "105",
@@ -141,20 +146,30 @@ export default function ClusterDetailScreen() {
   const [cluster, setCluster] = useState(mockClusters[id as string]);
   const [sortBy, setSortBy] = useState<"date" | "popularity">("date");
 
+  // Get events the user is attending
+  const attendingEvents =
+    cluster?.events.filter((event) => event.isAttending) || [];
+
   // Handle RSVP action
   const handleRSVP = (eventId: string) => {
     // In a real app, this would make an API call to update RSVP status
     console.log("RSVP for event:", eventId);
 
     // For demo purposes, just update the UI to show one more attendee
+    // and mark the user as attending this event
     setCluster({
       ...cluster,
       events: cluster.events.map((event) =>
         event.id === eventId
-          ? { ...event, attendees: event.attendees + 1 }
+          ? { ...event, attendees: event.attendees + 1, isAttending: true }
           : event
       ),
     });
+  };
+
+  // Navigate to add photos for a specific event
+  const goToAddPhotos = (eventId: string) => {
+    router.push(`/event/${eventId}`);
   };
 
   // Sort events by date or popularity
@@ -241,6 +256,59 @@ export default function ClusterDetailScreen() {
           </View>
         </View>
       </View>
+
+      {/* Attending Events Section */}
+      {attendingEvents.length > 0 && (
+        <View
+          style={[
+            styles.attendingEventsContainer,
+            { backgroundColor: colors.cardBackground },
+          ]}
+        >
+          <View style={styles.attendingEventsHeader}>
+            <Ionicons name="camera-outline" size={20} color={colors.tint} />
+            <Text
+              style={[
+                Typography.bodyMedium,
+                { color: colors.text, marginLeft: 8, fontWeight: "600" },
+              ]}
+            >
+              You're attending {attendingEvents.length}{" "}
+              {attendingEvents.length === 1 ? "event" : "events"} in this area
+            </Text>
+          </View>
+
+          <Text
+            style={[
+              Typography.bodySmall,
+              { color: colors.text, marginBottom: 10 },
+            ]}
+          >
+            You can add photos to these events:
+          </Text>
+
+          <View style={styles.attendingEventsList}>
+            {attendingEvents.map((event) => (
+              <TouchableOpacity
+                key={event.id}
+                style={[
+                  styles.attendingEventItem,
+                  { borderColor: colors.border },
+                ]}
+                onPress={() => goToAddPhotos(event.id)}
+              >
+                <Text
+                  style={[Typography.bodyMedium, { color: colors.text }]}
+                  numberOfLines={1}
+                >
+                  {event.title}
+                </Text>
+                <Ionicons name="camera" size={18} color={colors.tint} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       <View style={styles.sortContainer}>
         <Text style={[Typography.bodyMedium, { color: colors.text }]}>
@@ -338,6 +406,35 @@ const styles = StyleSheet.create({
   },
   statItem: {
     marginRight: 32,
+  },
+  attendingEventsContainer: {
+    margin: 16,
+    marginTop: 0,
+    marginBottom: 8,
+    padding: 16,
+    borderRadius: 12,
+  },
+  attendingEventsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  attendingEventsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  attendingEventItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginRight: 8,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    maxWidth: "100%",
+    minWidth: "45%",
   },
   sortContainer: {
     flexDirection: "row",

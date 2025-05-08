@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { EventPhotoUploader } from "../../components/EventPhotoUploader";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { useColorScheme } from "../../hooks/useColorScheme";
@@ -191,6 +192,27 @@ export default function EventDetailScreen() {
     } catch (error) {
       console.log("Error sharing event:", error);
     }
+  };
+
+  // Handle adding a new photo to the event
+  const handleAddPhoto = (photoUri: string) => {
+    if (!event) return;
+
+    // In a real app, this would upload the photo to a server
+    // and then update the event with the new photo URL
+
+    // For this demo, we'll just add it to the local state
+    setEvent({
+      ...event,
+      photos: [photoUri, ...event.photos],
+    });
+
+    // Show success message
+    Alert.alert(
+      "Photo Added",
+      "Your photo has been added to the event gallery!",
+      [{ text: "OK" }]
+    );
   };
 
   // If event not found
@@ -377,37 +399,66 @@ export default function EventDetailScreen() {
             </ScrollView>
           </View>
 
+          {/* Photo Section - Replace with EventPhotoUploader if attending */}
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                Photos ({event.photos.length})
-              </Text>
-              <TouchableOpacity
-                onPress={() => setShowAllPhotos(!showAllPhotos)}
-              >
-                <Text style={[Typography.bodySmall, { color: colors.tint }]}>
-                  {showAllPhotos ? "See Less" : "See All"}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.photosGrid}>
-              {event.photos
-                .slice(0, showAllPhotos ? event.photos.length : 4)
-                .map((photo: string, index: number) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.photoItem}
-                    onPress={() => console.log("Open photo view")}
+            {isAttending ? (
+              <EventPhotoUploader
+                eventId={event.id}
+                onPhotoAdded={handleAddPhoto}
+                existingPhotos={event.photos}
+              />
+            ) : (
+              <>
+                <View style={styles.sectionHeader}>
+                  <Text
+                    style={[Typography.headingSmall, { color: colors.text }]}
                   >
-                    <Image
-                      source={{ uri: photo }}
-                      style={styles.photo}
-                      contentFit="cover"
-                    />
+                    Photos ({event.photos.length})
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowAllPhotos(!showAllPhotos)}
+                  >
+                    <Text
+                      style={[Typography.bodySmall, { color: colors.tint }]}
+                    >
+                      {showAllPhotos ? "See Less" : "See All"}
+                    </Text>
                   </TouchableOpacity>
-                ))}
-            </View>
+                </View>
+
+                <View style={styles.photosGrid}>
+                  {event.photos
+                    .slice(0, showAllPhotos ? event.photos.length : 4)
+                    .map((photo: string, index: number) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.photoItem}
+                        onPress={() => console.log("Open photo view")}
+                      >
+                        <Image
+                          source={{ uri: photo }}
+                          style={styles.photo}
+                          contentFit="cover"
+                        />
+                      </TouchableOpacity>
+                    ))}
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.attendToAddPhotosButton,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={toggleAttendance}
+                >
+                  <Text style={[Typography.bodyMedium, { color: colors.tint }]}>
+                    Attend this event to add photos
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.section}>
@@ -554,6 +605,14 @@ const styles = StyleSheet.create({
     width: "100%",
     height: 120,
     borderRadius: 8,
+  },
+  attendToAddPhotosButton: {
+    marginTop: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    alignItems: "center",
   },
   commentItem: {
     marginBottom: 16,
