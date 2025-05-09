@@ -6,6 +6,7 @@ import { EventForm, EventFormData } from "../../components/EventForm";
 import { ImagePickerComponent } from "../../components/ImagePickerComponent";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { addNewEvent, NewEventData } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
 
 export default function CreateEventScreen() {
@@ -15,29 +16,62 @@ export default function CreateEventScreen() {
 
   // State for the event cover image
   const [coverImage, setCoverImage] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle form submission
   const handleSubmit = (data: EventFormData) => {
-    // In a real app, this would make an API call to save the event
-    console.log("Creating event:", { ...data, coverImage });
+    // Prevent double submission
+    if (isSubmitting) return;
 
-    // Generate a mock event ID
-    const eventId = Math.floor(Math.random() * 10000).toString();
+    setIsSubmitting(true);
 
-    // Show success message
-    Alert.alert("Event Created", "Your event has been created successfully!", [
-      {
-        text: "View Event",
-        onPress: () => router.push(`/event/${eventId}`),
-      },
-      {
-        text: "Create Another",
-        onPress: () => {
-          // Reset the form (in a real app this would clear the form)
-          setCoverImage("");
-        },
-      },
-    ]);
+    // Prepare event data for creation
+    const newEventData: NewEventData = {
+      title: data.title,
+      description: data.description,
+      location: data.location,
+      coordinates: data.coordinates,
+      date: data.date,
+      time: data.time,
+      imageUrl:
+        coverImage ||
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30", // Default image if none selected
+      genre: data.genre,
+    };
+
+    try {
+      // Add the event to our central data store
+      const newEventId = addNewEvent(newEventData);
+
+      // Show success message
+      Alert.alert(
+        "Event Created",
+        "Your event has been created successfully!",
+        [
+          {
+            text: "View Event",
+            onPress: () => router.push(`/event/${newEventId}`),
+          },
+          {
+            text: "Create Another",
+            onPress: () => {
+              // Reset the form
+              setCoverImage("");
+              setIsSubmitting(false);
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      console.error("Error creating event:", error);
+
+      // Show error message
+      Alert.alert(
+        "Error",
+        "There was a problem creating your event. Please try again.",
+        [{ text: "OK", onPress: () => setIsSubmitting(false) }]
+      );
+    }
   };
 
   // Handle image selection
@@ -60,7 +94,7 @@ export default function CreateEventScreen() {
               { color: colors.text, opacity: 0.7, marginTop: 8 },
             ]}
           >
-            Create and share your event with friends
+            Create and share your music event with friends
           </Text>
         </View>
 
@@ -73,7 +107,10 @@ export default function CreateEventScreen() {
         </View>
 
         {/* Event Form */}
-        <EventForm onSubmit={handleSubmit} />
+        <EventForm
+          onSubmit={handleSubmit}
+          submitButtonLabel={isSubmitting ? "Creating..." : "Create Event"}
+        />
       </ScrollView>
     </View>
   );

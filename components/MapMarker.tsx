@@ -1,28 +1,17 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { Marker } from "react-native-maps";
 import { Colors } from "../constants/Colors";
 import { Typography } from "../constants/Typography";
+import { EventMapCluster } from "../data/events";
 import { useColorScheme } from "../hooks/useColorScheme";
-
-/**
- * Interface for the event cluster data
- */
-export interface EventCluster {
-  id: string;
-  coordinate: {
-    latitude: number;
-    longitude: number;
-  };
-  count: number;
-  isHot: boolean; // For determining color intensity
-}
 
 /**
  * Component props
  */
 interface MapMarkerProps {
-  cluster: EventCluster;
-  onPress: (cluster: EventCluster) => void;
+  cluster: EventMapCluster;
+  onPress: (cluster: EventMapCluster) => void;
 }
 
 export function MapMarker({ cluster, onPress }: MapMarkerProps) {
@@ -43,7 +32,11 @@ export function MapMarker({ cluster, onPress }: MapMarkerProps) {
   };
 
   return (
-    <Pressable onPress={handlePress}>
+    <Marker
+      coordinate={cluster.coordinate}
+      onPress={handlePress}
+      tracksViewChanges={false}
+    >
       <View
         style={[
           styles.marker,
@@ -62,7 +55,7 @@ export function MapMarker({ cluster, onPress }: MapMarkerProps) {
           </Text>
         ) : null}
       </View>
-    </Pressable>
+    </Marker>
   );
 }
 

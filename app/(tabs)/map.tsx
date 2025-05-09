@@ -12,44 +12,11 @@ import {
   View,
 } from "react-native";
 import MapView, { PROVIDER_GOOGLE, Region } from "react-native-maps";
-import { EventCluster, MapMarker } from "../../components/MapMarker";
+import { MapMarker } from "../../components/MapMarker";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { EventMapCluster, mapClusters, musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-
-// Mock data for event clusters
-const mockEventClusters: EventCluster[] = [
-  {
-    id: "cluster1",
-    coordinate: { latitude: 37.427619, longitude: -122.170732 }, // Stanford campus
-    count: 5,
-    isHot: true,
-  },
-  {
-    id: "cluster2",
-    coordinate: { latitude: 37.429913, longitude: -122.173648 }, // Near Gates building
-    count: 3,
-    isHot: false,
-  },
-  {
-    id: "cluster3",
-    coordinate: { latitude: 37.424125, longitude: -122.166427 }, // Near Engineering Quad
-    count: 7,
-    isHot: true,
-  },
-  {
-    id: "cluster4",
-    coordinate: { latitude: 37.430829, longitude: -122.175038 }, // Near Oval
-    count: 2,
-    isHot: false,
-  },
-  {
-    id: "cluster5",
-    coordinate: { latitude: 37.426737, longitude: -122.169051 }, // Near Memorial Church
-    count: 4,
-    isHot: true,
-  },
-];
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -59,15 +26,6 @@ const initialRegion = {
   longitudeDelta: 0.0121,
 };
 
-// Event filter options
-const filterOptions = [
-  { id: "all", label: "All" },
-  { id: "today", label: "Today" },
-  { id: "weekend", label: "Weekend" },
-  { id: "academic", label: "Academic" },
-  { id: "social", label: "Social" },
-];
-
 export default function MapScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
@@ -75,7 +33,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   // State for map data
-  const [clusters, setClusters] = useState<EventCluster[]>(mockEventClusters);
+  const [clusters, setClusters] = useState<EventMapCluster[]>(mapClusters);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [locationPermission, setLocationPermission] = useState<boolean | null>(
@@ -108,7 +66,7 @@ export default function MapScreen() {
   }, []);
 
   // Handle cluster press
-  const handleClusterPress = (cluster: EventCluster) => {
+  const handleClusterPress = (cluster: EventMapCluster) => {
     router.push(`/cluster/${cluster.id}`);
   };
 
@@ -117,15 +75,13 @@ export default function MapScreen() {
     setSelectedFilter(filterId);
 
     // In a real app, this would filter the events based on the selected filter
-    // For demo purposes, we'll just randomize the clusters
     if (filterId === "all") {
-      setClusters(mockEventClusters);
+      setClusters(mapClusters);
     } else {
-      // Simulate filtered data by randomizing some properties
-      const filteredClusters = mockEventClusters.map((cluster) => ({
+      // Simulate filtered data by slightly modifying heat status but keeping counts accurate
+      const filteredClusters = mapClusters.map((cluster) => ({
         ...cluster,
-        count: Math.max(1, Math.floor(Math.random() * 10)),
-        isHot: Math.random() > 0.5,
+        isHot: Math.random() > 0.5, // Randomize the heat status only
       }));
 
       setClusters(filteredClusters);
@@ -191,7 +147,7 @@ export default function MapScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterScrollContent}
         >
-          {filterOptions.map((filter) => (
+          {musicGenres.map((filter) => (
             <TouchableOpacity
               key={filter.id}
               style={[

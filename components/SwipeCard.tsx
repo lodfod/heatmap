@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -47,7 +47,10 @@ export function SwipeCard({
   const router = useRouter();
 
   // Keep track of the current card index
-  const [cardIndex, setCardIndex] = React.useState(0);
+  const [cardIndex, setCardIndex] = useState(0);
+
+  // Add state to track if a swipe is in progress
+  const [isSwipingInProgress, setIsSwipingInProgress] = useState(false);
 
   // Create animation value for card position
   const position = useRef(new Animated.ValueXY()).current;
@@ -56,7 +59,7 @@ export function SwipeCard({
   const panResponder = useRef(
     PanResponder.create({
       // Allow the responder to detect touch events
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !isSwipingInProgress,
 
       // Handle card drag
       onPanResponderMove: (event, gesture) => {
@@ -91,6 +94,9 @@ export function SwipeCard({
 
   // Force swipe animation
   const forceSwipe = (direction: "left" | "right") => {
+    // Mark that swipe is in progress to prevent new gestures
+    setIsSwipingInProgress(true);
+
     const x = direction === "right" ? SCREEN_WIDTH + 100 : -SCREEN_WIDTH - 100;
 
     Animated.timing(position, {
@@ -111,6 +117,11 @@ export function SwipeCard({
 
     // Move to next card
     setCardIndex(cardIndex + 1);
+
+    // Reset swipe in progress flag after animation completes
+    setTimeout(() => {
+      setIsSwipingInProgress(false);
+    }, 100);
   };
 
   // Calculate card rotation based on position
@@ -130,7 +141,9 @@ export function SwipeCard({
 
   // Manually swipe the current card
   const swipeCard = (direction: "left" | "right") => {
-    forceSwipe(direction);
+    if (!isSwipingInProgress) {
+      forceSwipe(direction);
+    }
   };
 
   // Navigate to event details
@@ -143,28 +156,25 @@ export function SwipeCard({
     return <View style={styles.container}>{renderNoMoreCards()}</View>;
   }
 
+  // Get cards to be rendered
+  const cardsToRender = data.slice(cardIndex, cardIndex + 3);
+
   // Render current and next cards
   return (
     <View style={styles.container}>
-      {/* Render next few cards */}
-      {data
-        .map((item, i) => {
-          // Skip cards that have been swiped
-          if (i < cardIndex) {
-            return null;
-          }
-
-          // If not the top card, render with lower zIndex
-          if (i > cardIndex) {
+      {/* Render cards in reverse to get proper stacking */}
+      {cardsToRender
+        .map((item, index) => {
+          // For non-top cards (background cards)
+          if (index > 0) {
             return (
               <View
                 key={item.id}
                 style={[
                   styles.card,
                   {
-                    zIndex: 5 - (i - cardIndex),
-                    opacity: 0.9 - (i - cardIndex) * 0.2,
-                    top: 10 * (i - cardIndex),
+                    zIndex: 5 - index,
+                    top: 10 * index,
                     backgroundColor: colors.cardBackground,
                   },
                 ]}
@@ -174,14 +184,17 @@ export function SwipeCard({
             );
           }
 
-          // Render top card with animation
+          // For top card (the one being swiped)
           return (
             <Animated.View
               key={item.id}
               style={[
                 getCardStyle(),
                 styles.card,
-                { backgroundColor: colors.cardBackground },
+                {
+                  zIndex: 10, // Ensure top card is always on top
+                  backgroundColor: colors.cardBackground,
+                },
               ]}
               {...panResponder.panHandlers}
             >
@@ -204,6 +217,7 @@ export function SwipeCard({
             { backgroundColor: colors.error },
           ]}
           onPress={() => swipeCard("left")}
+          disabled={isSwipingInProgress}
         >
           <Ionicons name="close" size={30} color="#FFF" />
         </TouchableOpacity>
@@ -215,6 +229,7 @@ export function SwipeCard({
             { backgroundColor: colors.success },
           ]}
           onPress={() => swipeCard("right")}
+          disabled={isSwipingInProgress}
         >
           <Ionicons name="checkmark" size={30} color="#FFF" />
         </TouchableOpacity>
@@ -321,7 +336,7 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 20,
     paddingBottom: 30,
-    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   textContainer: {
     marginBottom: 10,

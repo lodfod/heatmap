@@ -1,81 +1,54 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { EventData, SwipeCard } from "../../components/SwipeCard";
+import { SwipeCard } from "../../components/SwipeCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { EventDetails, getAllEvents } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-
-// Mock data for swipeable events
-const mockEvents: EventData[] = [
-  {
-    id: "101",
-    title: "Silicon Valley Innovation Summit",
-    date: "Saturday, Jun 8, 2023 • 10:00 AM",
-    location: "Huang Engineering Center",
-    description:
-      "Join top entrepreneurs and VCs for a day of insights and networking.",
-    imageUrl: "https://images.unsplash.com/photo-1523580494863-6f3031224c94",
-    distance: "0.8 miles",
-  },
-  {
-    id: "102",
-    title: "Music in the Quad",
-    date: "Friday, Jun 7, 2023 • 6:00 PM",
-    location: "Main Quad",
-    description:
-      "Enjoy live music from student bands and local artists in the beautiful Main Quad.",
-    imageUrl: "https://images.unsplash.com/photo-1501612780327-45045538702b",
-    distance: "0.5 miles",
-  },
-  {
-    id: "103",
-    title: "Basketball Tournament Finals",
-    date: "Sunday, Jun 9, 2023 • 3:00 PM",
-    location: "Maples Pavilion",
-    description: "Watch the finals of the intramural basketball tournament.",
-    imageUrl: "https://images.unsplash.com/photo-1518407613690-d9fc990e795f",
-    distance: "1.2 miles",
-  },
-  {
-    id: "104",
-    title: "AI Ethics Panel Discussion",
-    date: "Tuesday, Jun 11, 2023 • 4:00 PM",
-    location: "Gates Building, Room 104",
-    description:
-      "Distinguished faculty discuss ethical considerations in artificial intelligence.",
-    imageUrl: "https://images.unsplash.com/photo-1558346490-a72e53ae2d4f",
-    distance: "0.7 miles",
-  },
-  {
-    id: "105",
-    title: "Sustainable Food Festival",
-    date: "Thursday, Jun 13, 2023 • 11:00 AM",
-    location: "Meyer Green",
-    description:
-      "Taste sustainable and locally sourced food while learning about eco-friendly practices.",
-    imageUrl: "https://images.unsplash.com/photo-1555244162-803834f70033",
-    distance: "0.3 miles",
-  },
-];
 
 export default function DiscoverScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
 
+  // State for event data
+  const [events, setEvents] = useState<EventDetails[]>([]);
+  const [loading, setLoading] = useState(true);
+
   // State for liked and rejected events
   const [likedEvents, setLikedEvents] = useState<string[]>([]);
   const [rejectedEvents, setRejectedEvents] = useState<string[]>([]);
 
+  // Load events on component mount
+  useEffect(() => {
+    // Get events from the data store
+    const fetchedEvents = getAllEvents();
+
+    // For Discover, we want to show events with more details
+    // so we map them to the required format
+    const formattedEvents = fetchedEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      date: event.date,
+      location: event.location,
+      description: "", // This field is missing in getAllEvents return type
+      imageUrl: event.imageUrl,
+      distance: "1.2 miles", // This is hardcoded for now, could be calculated based on user location
+    }));
+
+    setEvents(formattedEvents);
+    setLoading(false);
+  }, []);
+
   // Handle swipe right (like)
-  const handleSwipeRight = (item: EventData) => {
+  const handleSwipeRight = (item: any) => {
     console.log("Liked event:", item.id);
     setLikedEvents([...likedEvents, item.id]);
   };
 
   // Handle swipe left (reject)
-  const handleSwipeLeft = (item: EventData) => {
+  const handleSwipeLeft = (item: any) => {
     console.log("Rejected event:", item.id);
     setRejectedEvents([...rejectedEvents, item.id]);
   };
@@ -121,6 +94,26 @@ export default function DiscoverScreen() {
     );
   };
 
+  // Show loading indicator while fetching events
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.container,
+          {
+            backgroundColor: colors.background,
+            justifyContent: "center",
+            alignItems: "center",
+          },
+        ]}
+      >
+        <Text style={[Typography.bodyLarge, { color: colors.text }]}>
+          Loading events...
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
@@ -141,7 +134,7 @@ export default function DiscoverScreen() {
 
       <View style={styles.swipeContainer}>
         <SwipeCard
-          data={mockEvents}
+          data={events}
           onSwipeLeft={handleSwipeLeft}
           onSwipeRight={handleSwipeRight}
           renderNoMoreCards={renderNoMoreCards}

@@ -15,6 +15,7 @@ import {
 import { EventPhotoUploader } from "../../components/EventPhotoUploader";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { getEventById } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
 
 // Define types for our event data
@@ -44,119 +45,6 @@ interface EventDetails {
   comments: EventComment[];
 }
 
-// Mock data for events
-const mockEvents: Record<string, EventDetails> = {
-  "1": {
-    id: "1",
-    title: "End of Quarter Party",
-    date: "Friday, Jun 7, 2023 • 8:00 PM",
-    location: "The Treehouse",
-    imageUrl: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-    description:
-      "Celebrate the end of a successful quarter with food, drinks, and music! Come meet fellow students and faculty in a relaxed environment. Open to all students and faculty.",
-    organizer: "Student Union",
-    attendees: [
-      {
-        id: "1",
-        name: "Alex Johnson",
-        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-      },
-      {
-        id: "2",
-        name: "Emma Wilson",
-        image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
-      },
-      {
-        id: "3",
-        name: "Michael Brown",
-        image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
-      },
-      {
-        id: "4",
-        name: "Sophia Chen",
-        image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2",
-      },
-      {
-        id: "5",
-        name: "David Kim",
-        image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
-      },
-    ],
-    photos: [
-      "https://images.unsplash.com/photo-1496024840928-4c417adf211d",
-      "https://images.unsplash.com/photo-1519671482749-fd09be7ccebf",
-      "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7",
-      "https://images.unsplash.com/photo-1514525253161-7a46d19cd819",
-    ],
-    comments: [
-      {
-        id: "1",
-        user: "Emma Wilson",
-        text: "Looking forward to this!",
-        timestamp: "2 days ago",
-      },
-      {
-        id: "2",
-        user: "Michael Brown",
-        text: "Will there be food?",
-        timestamp: "1 day ago",
-      },
-      {
-        id: "3",
-        user: "Alex Johnson",
-        text: "Yes, pizza and drinks will be provided!",
-        timestamp: "1 day ago",
-      },
-    ],
-  },
-  "2": {
-    id: "2",
-    title: "CS Research Symposium",
-    date: "Tuesday, Jun 4, 2023 • 3:00 PM",
-    location: "Gates Computer Science Building",
-    imageUrl: "https://images.unsplash.com/photo-1517048676732-d65bc937f952",
-    description:
-      "Join us for the annual CS Research Symposium where students and faculty present their latest research projects. Topics include AI, machine learning, computer vision, and more.",
-    organizer: "CS Department",
-    attendees: [
-      {
-        id: "1",
-        name: "Alex Johnson",
-        image: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-      },
-      {
-        id: "2",
-        name: "Emma Wilson",
-        image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
-      },
-      {
-        id: "3",
-        name: "Michael Brown",
-        image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
-      },
-    ],
-    photos: [
-      "https://images.unsplash.com/photo-1523240795612-9a054b0db644",
-      "https://images.unsplash.com/photo-1531482615713-2afd69097998",
-      "https://images.unsplash.com/photo-1516321497487-e288fb19713f",
-    ],
-    comments: [
-      {
-        id: "1",
-        user: "Alex Johnson",
-        text: "Will the presentations be recorded?",
-        timestamp: "3 days ago",
-      },
-      {
-        id: "2",
-        user: "CS Department",
-        text: "Yes, recordings will be available on our website after the event.",
-        timestamp: "2 days ago",
-      },
-    ],
-  },
-};
-
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -164,10 +52,8 @@ export default function EventDetailScreen() {
   const router = useRouter();
 
   // State for event data and user interactions
-  const [event, setEvent] = useState<EventDetails | undefined>(
-    mockEvents[id as string]
-  );
-  const [isAttending, setIsAttending] = useState(false);
+  const [event, setEvent] = useState(getEventById(id as string));
+  const [isAttending, setIsAttending] = useState(event?.isAttending || false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
 
   // Toggle attendance status
@@ -378,7 +264,7 @@ export default function EventDetailScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.attendeesContainer}
             >
-              {event.attendees.map((attendee: EventAttendee) => (
+              {event.attendees.map((attendee) => (
                 <View key={attendee.id} style={styles.attendeeItem}>
                   <Image
                     source={{ uri: attendee.image }}
@@ -429,7 +315,7 @@ export default function EventDetailScreen() {
                 <View style={styles.photosGrid}>
                   {event.photos
                     .slice(0, showAllPhotos ? event.photos.length : 4)
-                    .map((photo: string, index: number) => (
+                    .map((photo, index) => (
                       <TouchableOpacity
                         key={index}
                         style={styles.photoItem}
@@ -473,7 +359,7 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {event.comments.map((comment: EventComment) => (
+            {event.comments.map((comment) => (
               <View key={comment.id} style={styles.commentItem}>
                 <Text
                   style={[

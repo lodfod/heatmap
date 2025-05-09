@@ -12,129 +12,8 @@ import {
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { eventClusters } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-
-// Mock data for event clusters
-const mockClusters: Record<
-  string,
-  {
-    id: string;
-    name: string;
-    coordinates: {
-      latitude: number;
-      longitude: number;
-    };
-    description: string;
-    events: {
-      id: string;
-      title: string;
-      date: string;
-      location: string;
-      imageUrl: string;
-      attendees: number;
-      isAttending?: boolean; // New property to track if the user is attending
-    }[];
-  }
-> = {
-  cluster1: {
-    id: "cluster1",
-    name: "Stanford Main Campus",
-    coordinates: { latitude: 37.427619, longitude: -122.170732 },
-    description: "Events happening around Stanford Main Campus area.",
-    events: [
-      {
-        id: "1",
-        title: "End of Quarter Party",
-        date: "Friday, Jun 7, 2023 • 8:00 PM",
-        location: "The Treehouse",
-        imageUrl:
-          "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-        attendees: 42,
-        isAttending: true,
-      },
-      {
-        id: "4",
-        title: "Intramural Soccer Championship",
-        date: "Saturday, Jun 8, 2023 • 2:00 PM",
-        location: "Cagan Stadium",
-        imageUrl:
-          "https://images.unsplash.com/photo-1574629810360-7efbbe195018",
-        attendees: 56,
-      },
-      {
-        id: "103",
-        title: "Basketball Tournament Finals",
-        date: "Sunday, Jun 9, 2023 • 3:00 PM",
-        location: "Maples Pavilion",
-        imageUrl:
-          "https://images.unsplash.com/photo-1518407613690-d9fc990e795f",
-        attendees: 34,
-        isAttending: true,
-      },
-    ],
-  },
-  cluster2: {
-    id: "cluster2",
-    name: "Engineering Quad",
-    coordinates: { latitude: 37.429913, longitude: -122.173648 },
-    description: "Events happening at and around the Engineering Quad.",
-    events: [
-      {
-        id: "2",
-        title: "CS Research Symposium",
-        date: "Tuesday, Jun 4, 2023 • 3:00 PM",
-        location: "Gates Computer Science Building",
-        imageUrl:
-          "https://images.unsplash.com/photo-1517048676732-d65bc937f952",
-        attendees: 24,
-        isAttending: true,
-      },
-      {
-        id: "104",
-        title: "AI Ethics Panel Discussion",
-        date: "Tuesday, Jun 11, 2023 • 4:00 PM",
-        location: "Gates Building, Room 104",
-        imageUrl: "https://images.unsplash.com/photo-1558346490-a72e53ae2d4f",
-        attendees: 18,
-      },
-    ],
-  },
-  cluster3: {
-    id: "cluster3",
-    name: "Tresidder Union",
-    coordinates: { latitude: 37.424125, longitude: -122.166427 },
-    description: "Events happening at Tresidder Union and surrounding areas.",
-    events: [
-      {
-        id: "3",
-        title: "Design Thinking Workshop",
-        date: "Monday, Jun 3, 2023 • 5:30 PM",
-        location: "Huang Engineering Center",
-        imageUrl:
-          "https://images.unsplash.com/photo-1515187029135-18ee286d815b",
-        attendees: 18,
-      },
-      {
-        id: "5",
-        title: "Alumni Networking Mixer",
-        date: "Thursday, Jun 13, 2023 • 6:00 PM",
-        location: "CoHo Coffee House",
-        imageUrl:
-          "https://images.unsplash.com/photo-1528605248644-14dd04022da1",
-        attendees: 31,
-        isAttending: true,
-      },
-      {
-        id: "105",
-        title: "Sustainable Food Festival",
-        date: "Thursday, Jun 13, 2023 • 11:00 AM",
-        location: "Meyer Green",
-        imageUrl: "https://images.unsplash.com/photo-1555244162-803834f70033",
-        attendees: 27,
-      },
-    ],
-  },
-};
 
 export default function ClusterDetailScreen() {
   const { id } = useLocalSearchParams();
@@ -143,7 +22,7 @@ export default function ClusterDetailScreen() {
   const router = useRouter();
 
   // State for cluster data
-  const [cluster, setCluster] = useState(mockClusters[id as string]);
+  const [cluster, setCluster] = useState(eventClusters[id as string]);
   const [sortBy, setSortBy] = useState<"date" | "popularity">("date");
 
   // Get events the user is attending
@@ -273,7 +152,7 @@ export default function ClusterDetailScreen() {
                 { color: colors.text, marginLeft: 8, fontWeight: "600" },
               ]}
             >
-              You're attending {attendingEvents.length}{" "}
+              You&apos;re attending {attendingEvents.length}{" "}
               {attendingEvents.length === 1 ? "event" : "events"} in this area
             </Text>
           </View>

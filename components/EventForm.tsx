@@ -12,6 +12,7 @@ import {
 import { Colors } from "../constants/Colors";
 import { Typography } from "../constants/Typography";
 import { useColorScheme } from "../hooks/useColorScheme";
+import { LocationData, LocationSearch } from "./LocationSearch";
 
 /**
  * Interface for event data
@@ -20,9 +21,14 @@ export interface EventFormData {
   title: string;
   description: string;
   location: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
   date: string;
   time: string;
   isPublic: boolean;
+  genre?: string;
 }
 
 /**
@@ -33,6 +39,15 @@ interface EventFormProps {
   onSubmit: (data: EventFormData) => void;
   submitButtonLabel?: string;
 }
+
+// List of music genres
+const genreOptions = [
+  { id: "rock", label: "Rock" },
+  { id: "electronic", label: "Electronic" },
+  { id: "jazz", label: "Jazz" },
+  { id: "hiphop", label: "Hip-Hop" },
+  { id: "world", label: "World Music" },
+];
 
 export function EventForm({
   initialData = {},
@@ -47,9 +62,14 @@ export function EventForm({
     title: initialData.title || "",
     description: initialData.description || "",
     location: initialData.location || "",
+    coordinates: initialData.coordinates || {
+      latitude: 37.427619,
+      longitude: -122.170732, // Default to Stanford
+    },
     date: initialData.date || "",
     time: initialData.time || "",
     isPublic: initialData.isPublic !== undefined ? initialData.isPublic : true,
+    genre: initialData.genre || "rock",
   });
 
   // Field validation state
@@ -60,7 +80,7 @@ export function EventForm({
   // Handle text input changes
   const handleChange = (
     field: keyof EventFormData,
-    value: string | boolean
+    value: string | boolean | object
   ) => {
     setFormData({
       ...formData,
@@ -76,9 +96,20 @@ export function EventForm({
     }
   };
 
+  // Handle location selection
+  const handleLocationSelect = (location: LocationData) => {
+    handleChange("location", location.name);
+    handleChange("coordinates", location.coordinates);
+  };
+
   // Toggle public/private setting
   const toggleIsPublic = () => {
     handleChange("isPublic", !formData.isPublic);
+  };
+
+  // Handle genre selection
+  const handleGenreSelect = (genreId: string) => {
+    handleChange("genre", genreId);
   };
 
   // Validate form before submission
@@ -173,26 +204,16 @@ export function EventForm({
           />
         </View>
 
-        {/* Location Input */}
+        {/* Location Search */}
         <View style={styles.fieldContainer}>
           <Text
             style={[Typography.bodySmall, styles.label, { color: colors.text }]}
           >
             Location *
           </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.cardBackground,
-                color: colors.text,
-                borderColor: errors.location ? colors.error : colors.border,
-              },
-            ]}
-            value={formData.location}
-            onChangeText={(value) => handleChange("location", value)}
-            placeholder="Enter event location"
-            placeholderTextColor={colors.icon}
+          <LocationSearch
+            onSelectLocation={handleLocationSelect}
+            initialLocation={formData.location}
           />
           {errors.location ? (
             <Text style={[Typography.caption, { color: colors.error }]}>
@@ -257,7 +278,7 @@ export function EventForm({
               ]}
               value={formData.time}
               onChangeText={(value) => handleChange("time", value)}
-              placeholder="7:00 PM"
+              placeholder="HH:MM AM/PM"
               placeholderTextColor={colors.icon}
             />
             {errors.time ? (
@@ -268,51 +289,95 @@ export function EventForm({
           </View>
         </View>
 
-        {/* Public/Private Toggle */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[
-              styles.toggleOption,
-              {
-                backgroundColor: formData.isPublic
-                  ? colors.accent1
-                  : colors.cardBackground,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => formData.isPublic || toggleIsPublic()}
+        {/* Genre Selection */}
+        <View style={styles.fieldContainer}>
+          <Text
+            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
           >
-            <Text
-              style={[
-                Typography.bodyMedium,
-                { color: formData.isPublic ? "#FFF" : colors.text },
-              ]}
-            >
-              Public
-            </Text>
-          </TouchableOpacity>
+            Genre
+          </Text>
+          <View style={styles.genreContainer}>
+            {genreOptions.map((genre) => (
+              <TouchableOpacity
+                key={genre.id}
+                style={[
+                  styles.genreOption,
+                  {
+                    backgroundColor:
+                      formData.genre === genre.id
+                        ? colors.tint
+                        : colors.cardBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => handleGenreSelect(genre.id)}
+              >
+                <Text
+                  style={[
+                    Typography.bodySmall,
+                    {
+                      color: formData.genre === genre.id ? "#FFF" : colors.text,
+                    },
+                  ]}
+                >
+                  {genre.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-          <TouchableOpacity
-            style={[
-              styles.toggleOption,
-              {
-                backgroundColor: !formData.isPublic
-                  ? colors.accent1
-                  : colors.cardBackground,
-                borderColor: colors.border,
-              },
-            ]}
-            onPress={() => !formData.isPublic || toggleIsPublic()}
+        {/* Public/Private Toggle */}
+        <View style={styles.fieldContainer}>
+          <Text
+            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
           >
-            <Text
+            Event Visibility
+          </Text>
+          <View style={styles.toggleContainer}>
+            <TouchableOpacity
               style={[
-                Typography.bodyMedium,
-                { color: !formData.isPublic ? "#FFF" : colors.text },
+                styles.toggleOption,
+                {
+                  backgroundColor: formData.isPublic
+                    ? colors.tint
+                    : colors.cardBackground,
+                  borderColor: colors.border,
+                },
               ]}
+              onPress={() => handleChange("isPublic", true)}
             >
-              Private
-            </Text>
-          </TouchableOpacity>
+              <Text
+                style={[
+                  Typography.bodySmall,
+                  { color: formData.isPublic ? "#FFF" : colors.text },
+                ]}
+              >
+                Public
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleOption,
+                {
+                  backgroundColor: !formData.isPublic
+                    ? colors.tint
+                    : colors.cardBackground,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={() => handleChange("isPublic", false)}
+            >
+              <Text
+                style={[
+                  Typography.bodySmall,
+                  { color: !formData.isPublic ? "#FFF" : colors.text },
+                ]}
+              >
+                Private
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Submit Button */}
@@ -331,46 +396,58 @@ export function EventForm({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     padding: 16,
   },
   fieldContainer: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   label: {
     marginBottom: 8,
+    fontWeight: "600",
   },
   input: {
+    height: 50,
     borderWidth: 1,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
+    paddingHorizontal: 16,
   },
   textArea: {
-    height: 100,
+    height: 120,
     paddingTop: 12,
+    paddingBottom: 12,
   },
   rowContainer: {
     flexDirection: "row",
-    marginBottom: 16,
   },
   toggleContainer: {
     flexDirection: "row",
-    marginBottom: 24,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   toggleOption: {
     flex: 1,
     paddingVertical: 12,
     alignItems: "center",
-    justifyContent: "center",
     borderWidth: 1,
   },
   submitButton: {
     paddingVertical: 16,
-    borderRadius: 10,
+    borderRadius: 8,
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 24,
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  genreContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  genreOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 1,
   },
 });

@@ -5,51 +5,8 @@ import { FlatList, StyleSheet, Text, View } from "react-native";
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
+import { getAllEvents } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-
-// Mock data for personalized events
-const mockEvents = [
-  {
-    id: "1",
-    title: "End of Quarter Party",
-    date: "Friday, Jun 7, 2023 • 8:00 PM",
-    location: "The Treehouse",
-    imageUrl: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-    attendees: 42,
-  },
-  {
-    id: "2",
-    title: "CS Research Symposium",
-    date: "Tuesday, Jun 4, 2023 • 3:00 PM",
-    location: "Gates Computer Science Building",
-    imageUrl: "https://images.unsplash.com/photo-1517048676732-d65bc937f952",
-    attendees: 24,
-  },
-  {
-    id: "3",
-    title: "Design Thinking Workshop",
-    date: "Monday, Jun 3, 2023 • 5:30 PM",
-    location: "Huang Engineering Center",
-    imageUrl: "https://images.unsplash.com/photo-1515187029135-18ee286d815b",
-    attendees: 18,
-  },
-  {
-    id: "4",
-    title: "Intramural Soccer Championship",
-    date: "Saturday, Jun 8, 2023 • 2:00 PM",
-    location: "Cagan Stadium",
-    imageUrl: "https://images.unsplash.com/photo-1574629810360-7efbbe195018",
-    attendees: 56,
-  },
-  {
-    id: "5",
-    title: "Alumni Networking Mixer",
-    date: "Thursday, Jun 13, 2023 • 6:00 PM",
-    location: "CoHo Coffee House",
-    imageUrl: "https://images.unsplash.com/photo-1528605248644-14dd04022da1",
-    attendees: 31,
-  },
-];
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -57,7 +14,7 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // State for events data
-  const [events, setEvents] = useState(mockEvents);
+  const [events, setEvents] = useState(getAllEvents());
 
   // Handle RSVP action
   const handleRSVP = (id: string) => {
@@ -88,7 +45,7 @@ export default function HomeScreen() {
             { color: colors.text, opacity: 0.7, marginTop: 8 },
           ]}
         >
-          Events for you based on your interests and friends
+          Music events happening around campus
         </Text>
       </View>
 
