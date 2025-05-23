@@ -1,3 +1,4 @@
+import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
@@ -19,7 +20,7 @@ export default function CreateEventScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Handle form submission
-  const handleSubmit = (data: EventFormData) => {
+  const handleSubmit = async (data: EventFormData) => {
     // Prevent double submission
     if (isSubmitting) return;
 
@@ -28,20 +29,29 @@ export default function CreateEventScreen() {
     // Prepare event data for creation
     const newEventData: NewEventData = {
       title: data.title,
-      description: data.description,
+      date: data.date + data.time,
       location: data.location,
-      coordinates: data.coordinates,
-      date: data.date,
-      time: data.time,
-      imageUrl:
+      description: data.description,
+      created_by: "0",
+      genre: data.genre || "",
+      latitude: data.coordinates.latitude,
+      longitude: data.coordinates.longitude,
+      img_path:
         coverImage ||
         "https://images.unsplash.com/photo-1492684223066-81342ee5ff30", // Default image if none selected
-      genre: data.genre,
+      
     };
 
     try {
       // Add the event to our central data store
       const newEventId = addNewEvent(newEventData);
+
+      //adding the event to the table
+      const { data, error } = await supabase
+        .from('Events')
+        .insert([
+          newEventData,
+        ]);
 
       // Show success message
       Alert.alert(

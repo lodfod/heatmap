@@ -748,15 +748,14 @@ function findNearestCluster(
 export interface NewEventData {
   title: string;
   date: string;
-  time: string;
   location: string;
   description: string;
-  coordinates: {
-    latitude: number;
-    longitude: number;
-  };
-  imageUrl: string;
+  created_by: string;
   genre?: string;
+  event_visibility?: boolean;
+  latitude: number;
+  longitude: number;
+  img_path: string;
 }
 
 export function addNewEvent(eventData: NewEventData): string {
