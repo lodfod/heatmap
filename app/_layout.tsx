@@ -1,9 +1,34 @@
+// /app/_layout.tsx or wherever your root layout is
+import 'react-native-url-polyfill/auto';
+
+import { decode, encode } from 'base-64';
+import { Buffer } from 'buffer';
+
+if (typeof global.atob === 'undefined') {
+  global.atob = decode;
+}
+
+if (typeof global.btoa === 'undefined') {
+  global.btoa = encode;
+}
+
+if (typeof global.Buffer === 'undefined') {
+  global.Buffer = Buffer;
+}
+
+// Then proceed with your layout setup
+import { Stack } from 'expo-router';
+
+export default function RootLayout() {
+  return <Stack />;
+}
+
 import {
   DarkTheme,
   DefaultTheme,
   ThemeProvider,
 } from "@react-navigation/native";
-import { SplashScreen, Stack } from "expo-router";
+import { SplashScreen } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import "react-native-reanimated";
