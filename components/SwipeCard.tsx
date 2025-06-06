@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Animated,
   Dimensions,
@@ -31,60 +30,32 @@ export interface EventData {
 
 interface SwipeCardProps {
   data: EventData[];
-  onSwipeLeft: (item: EventData) => void;
-  onSwipeRight: (item: EventData) => void;
+  onSwipeRight?: (item: EventData) => void;
+  onSwipeLeft?: (item: EventData) => void;
   renderNoMoreCards: () => React.ReactNode;
 }
 
 export function SwipeCard({
   data,
-  onSwipeLeft,
   onSwipeRight,
+  onSwipeLeft,
   renderNoMoreCards,
 }: SwipeCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
-  const router = useRouter();
 
-  // Keep track of the current card index
-  const [cardIndex, setCardIndex] = useState(0);
-
-  // Add state to track if a swipe is in progress
+  // Use a ref to track the current index
+  const indexRef = useRef(0);
+  // State to trigger re-renders
+  const [currentIndex, setCurrentIndex] = useState(0);
+  // Track if swiping is in progress
   const [isSwipingInProgress, setIsSwipingInProgress] = useState(false);
-
-  // Create animation value for card position
+  // Position for animation
   const position = useRef(new Animated.ValueXY()).current;
+  // Track processed card IDs
+  const processedCardIds = useRef(new Set<string>()).current;
 
-  // Create pan responder for handling swipe gestures
-  const panResponder = useRef(
-    PanResponder.create({
-      // Allow the responder to detect touch events
-      onStartShouldSetPanResponder: () => !isSwipingInProgress,
-
-      // Handle card drag
-      onPanResponderMove: (event, gesture) => {
-        position.setValue({ x: gesture.dx, y: gesture.dy });
-      },
-
-      // Handle release of card
-      onPanResponderRelease: (event, gesture) => {
-        // If swiped far enough to the right
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          forceSwipe("right");
-        }
-        // If swiped far enough to the left
-        else if (gesture.dx < -SWIPE_THRESHOLD) {
-          forceSwipe("left");
-        }
-        // Otherwise, return to center
-        else {
-          resetPosition();
-        }
-      },
-    })
-  ).current;
-
-  // Reset the card position
+  // Reset card position
   const resetPosition = () => {
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
@@ -92,13 +63,20 @@ export function SwipeCard({
     }).start();
   };
 
-  // Force swipe animation
+  // Force swipe animation with direction
   const forceSwipe = (direction: "left" | "right") => {
-    // Mark that swipe is in progress to prevent new gestures
+    // Prevent multiple swipes
+    if (isSwipingInProgress || indexRef.current >= data.length) {
+      return;
+    }
+
+    // Lock swiping during animation
     setIsSwipingInProgress(true);
 
+    // Calculate animation destination
     const x = direction === "right" ? SCREEN_WIDTH + 100 : -SCREEN_WIDTH - 100;
 
+    // Run the animation
     Animated.timing(position, {
       toValue: { x, y: 0 },
       duration: SWIPE_OUT_DURATION,
@@ -108,68 +86,97 @@ export function SwipeCard({
 
   // Handle swipe completion
   const onSwipeComplete = (direction: "left" | "right") => {
-    const item = data[cardIndex];
+    // Get current card
+    const currentCard = data[indexRef.current];
 
-    direction === "right" ? onSwipeRight(item) : onSwipeLeft(item);
+    if (currentCard) {
+      const cardId = currentCard.id;
 
-    // Reset position for next card
+      // Check if this card has been processed
+      if (!processedCardIds.has(cardId)) {
+        // Add to processed set
+        processedCardIds.add(cardId);
+
+        // Call appropriate callback
+        if (direction === "right" && onSwipeRight) {
+          onSwipeRight(currentCard);
+          console.log(`SwipeCard: Swiped RIGHT on event ID: ${cardId}, title: ${currentCard.title}, index: ${indexRef.current}`);
+        } else if (direction === "left" && onSwipeLeft) {
+          onSwipeLeft(currentCard);
+          console.log(`SwipeCard: Swiped LEFT on event ID: ${cardId}, title: ${currentCard.title}, index: ${indexRef.current}`);
+        }
+      }
+    }
+
+    // Reset for next card
     position.setValue({ x: 0, y: 0 });
-
-    // Move to next card
-    setCardIndex(cardIndex + 1);
-
-    // Reset swipe in progress flag after animation completes
-    setTimeout(() => {
-      setIsSwipingInProgress(false);
-    }, 100);
+    
+    // Increment index
+    indexRef.current += 1;
+    // Update state to trigger re-render
+    setCurrentIndex(indexRef.current);
+    
+    // Allow swiping again
+    setIsSwipingInProgress(false);
   };
 
-  // Calculate card rotation based on position
+  // Manual button swipe
+  const swipeCard = (direction: "left" | "right") => {
+    if (!isSwipingInProgress && indexRef.current < data.length) {
+      forceSwipe(direction);
+    }
+  };
+
+  // Pan responder for touch handling
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isSwipingInProgress,
+      onPanResponderMove: (event, gesture) => {
+        position.setValue({ x: gesture.dx, y: gesture.dy });
+      },
+      onPanResponderRelease: (event, gesture) => {
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          forceSwipe("right");
+        } else if (gesture.dx < -SWIPE_THRESHOLD) {
+          forceSwipe("left");
+        } else {
+          resetPosition();
+        }
+      },
+    })
+  ).current;
+
+  // Card rotation style
   const getCardStyle = () => {
-    // Create interpolation for rotation
     const rotate = position.x.interpolate({
       inputRange: [-SCREEN_WIDTH * 1.5, 0, SCREEN_WIDTH * 1.5],
       outputRange: ["-30deg", "0deg", "30deg"],
     });
 
-    // Return transform style
     return {
       ...position.getLayout(),
       transform: [{ rotate }],
     };
   };
 
-  // Manually swipe the current card
-  const swipeCard = (direction: "left" | "right") => {
-    if (!isSwipingInProgress) {
-      forceSwipe(direction);
-    }
-  };
-
-  // Navigate to event details
-  const goToEventDetails = (id: string) => {
-    router.push(`/event/${id}`);
-  };
-
-  // If we've gone through all cards
-  if (cardIndex >= data.length) {
+  // No more cards check
+  if (currentIndex >= data.length) {
     return <View style={styles.container}>{renderNoMoreCards()}</View>;
   }
 
-  // Get cards to be rendered
-  const cardsToRender = data.slice(cardIndex, cardIndex + 3);
+  // Get cards to display
+  const cardsToShow = data.slice(currentIndex, currentIndex + 3);
 
-  // Render current and next cards
   return (
     <View style={styles.container}>
-      {/* Render cards in reverse to get proper stacking */}
-      {cardsToRender
+      {/* Cards - rendered in reverse for proper stacking */}
+      {cardsToShow
         .map((item, index) => {
-          // For non-top cards (background cards)
+          // Background cards
           if (index > 0) {
             return (
               <View
-                key={item.id}
+                key={`bg-${item.id}-${currentIndex + index}`}
                 style={[
                   styles.card,
                   {
@@ -184,31 +191,27 @@ export function SwipeCard({
             );
           }
 
-          // For top card (the one being swiped)
+          // Top card (being swiped)
           return (
             <Animated.View
-              key={item.id}
+              key={`top-${item.id}-${currentIndex}`}
               style={[
                 getCardStyle(),
                 styles.card,
                 {
-                  zIndex: 10, // Ensure top card is always on top
+                  zIndex: 10,
                   backgroundColor: colors.cardBackground,
                 },
               ]}
               {...panResponder.panHandlers}
             >
-              <CardContent
-                item={item}
-                colors={colors}
-                onPress={() => goToEventDetails(item.id)}
-              />
+              <CardContent item={item} colors={colors} />
             </Animated.View>
           );
         })
         .reverse()}
 
-      {/* Swipe buttons */}
+      {/* Control buttons */}
       <View style={styles.buttonsContainer}>
         <TouchableOpacity
           style={[
@@ -239,20 +242,15 @@ export function SwipeCard({
 }
 
 // Card content component
-interface CardContentProps {
-  item: EventData;
-  colors: typeof Colors.light;
-  onPress?: () => void;
-}
-
-function CardContent({ item, colors, onPress }: CardContentProps) {
+function CardContent({ 
+  item, 
+  colors 
+}: { 
+  item: EventData; 
+  colors: typeof Colors.light 
+}) {
   return (
-    <TouchableOpacity
-      style={styles.cardContent}
-      onPress={onPress}
-      activeOpacity={0.9}
-      disabled={!onPress}
-    >
+    <View style={styles.cardContent}>
       {/* Event Image */}
       <Image
         source={{ uri: item.imageUrl }}
@@ -288,17 +286,8 @@ function CardContent({ item, colors, onPress }: CardContentProps) {
             </Text>
           )}
         </View>
-
-        {onPress && (
-          <View style={styles.seeMoreContainer}>
-            <Text style={[Typography.buttonSmall, { color: "#FFF" }]}>
-              See Details
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#FFF" />
-          </View>
-        )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -365,10 +354,5 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     marginLeft: 20,
-  },
-  seeMoreContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
   },
 });
