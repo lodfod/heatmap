@@ -36,6 +36,10 @@ export function EventCard({
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
 
+  // Ensure we have a valid image URL
+  const validImageUrl =
+    imageUrl || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30";
+
   // Navigate to the event details page
   const handlePress = () => {
     router.push(`/event/${id}`);
@@ -56,10 +60,16 @@ export function EventCard({
     >
       {/* Event Image */}
       <Image
-        source={{ uri: imageUrl }}
+        source={{ uri: validImageUrl }}
         style={styles.image}
         contentFit="cover"
         transition={200}
+        onError={(error) => {
+          console.log("❌ Image load error for event", id, ":", error);
+        }}
+        onLoad={() => {
+          console.log("✅ Image loaded for event", id);
+        }}
       />
 
       {/* Event Info */}

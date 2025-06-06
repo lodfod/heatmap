@@ -1,3 +1,6 @@
+// Import crypto polyfill first (required for GooglePlacesAutocomplete and uuid)
+import "react-native-get-random-values";
+
 // Import polyfills for Node.js modules
 import "react-native-url-polyfill/auto";
 

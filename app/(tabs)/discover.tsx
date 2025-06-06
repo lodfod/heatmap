@@ -22,23 +22,33 @@ export default function DiscoverScreen() {
 
   // Load events on component mount
   useEffect(() => {
-    // Get events from the data store
-    const fetchedEvents = getAllEvents();
+    const loadEvents = async () => {
+      try {
+        // Get events from the data store
+        const fetchedEvents = await getAllEvents();
 
-    // For Discover, we want to show events with more details
-    // so we map them to the required format
-    const formattedEvents = fetchedEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      date: event.date,
-      location: event.location,
-      description: "", // This field is missing in getAllEvents return type
-      imageUrl: event.imageUrl,
-      distance: "1.2 miles", // This is hardcoded for now, could be calculated based on user location
-    }));
+        // For Discover, we want to show events with more details
+        // so we map them to the required format
+        const formattedEvents = fetchedEvents.map((event) => ({
+          id: event.id,
+          title: event.title,
+          date: event.date,
+          location: event.location,
+          description: "", // This field is missing in getAllEvents return type
+          imageUrl: event.imageUrl,
+          distance: "1.2 miles", // This is hardcoded for now, could be calculated based on user location
+        }));
 
-    setEvents(formattedEvents);
-    setLoading(false);
+        setEvents(formattedEvents);
+      } catch (error) {
+        console.error("Error loading events:", error);
+        setEvents([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEvents();
   }, []);
 
   // Handle swipe right (like)

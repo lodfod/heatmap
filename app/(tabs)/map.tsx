@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -15,9 +15,9 @@ import MapView, { PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { MapMarker } from "../../components/MapMarker";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
-import { musicGenres } from "../../data/events";
+import { getEventsWithLocation, musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-import { Event, fetchEventsWithLocation } from "../../lib/supabase";
+import { Event } from "../../lib/supabase";
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -36,7 +36,26 @@ interface EventCluster {
   isHot: boolean;
 }
 
-// Function to calculate distance between two coordinates (Haversine formula)
+// Add zoom level thresholds for clustering
+const ZOOM_THRESHOLDS = {
+  VERY_FAR: 0.02, // > 0.02 delta = very far out, large clusters (500m radius)
+  FAR: 0.01, // 0.01-0.02 delta = far, medium clusters (200m radius)
+  MEDIUM: 0.005, // 0.005-0.01 delta = medium, small clusters (100m radius)
+  CLOSE: 0.002, // 0.002-0.005 delta = close, tiny clusters (50m radius)
+  VERY_CLOSE: 0.001, // < 0.001 delta = very close, no clustering (individual events)
+};
+
+// Function to get clustering radius based on zoom level
+function getClusterRadiusForZoom(latitudeDelta: number): number {
+  if (latitudeDelta > ZOOM_THRESHOLDS.VERY_FAR) return 500;
+  if (latitudeDelta > ZOOM_THRESHOLDS.FAR) return 200;
+  if (latitudeDelta > ZOOM_THRESHOLDS.MEDIUM) return 100;
+  if (latitudeDelta > ZOOM_THRESHOLDS.CLOSE) return 50;
+  if (latitudeDelta > ZOOM_THRESHOLDS.VERY_CLOSE) return 25;
+  return 0; // No clustering at very close zoom
+}
+
+// Haversine distance calculation
 function getDistance(
   lat1: number,
   lon1: number,
@@ -56,27 +75,40 @@ function getDistance(
   return R * c;
 }
 
-// Function to cluster nearby events
+// Improved clustering algorithm that properly handles re-clustering
 function clusterEvents(
   events: Event[],
   clusterRadius: number = 100
 ): EventCluster[] {
-  const clusters: EventCluster[] = [];
-  const processedEvents = new Set<string>();
+  if (!events || events.length === 0) {
+    return [];
+  }
 
-  events.forEach((event) => {
-    if (processedEvents.has(event.id)) return;
-
-    const cluster: EventCluster = {
-      id: `cluster_${event.id}`,
+  // If cluster radius is 0, return each event as its own cluster
+  if (clusterRadius === 0) {
+    return events.map((event) => ({
+      id: `individual_${event.id}`,
       events: [event],
       centerLatitude: event.latitude,
       centerLongitude: event.longitude,
-      isHot: event.is_hot,
-    };
+      isHot: event.is_hot || false,
+    }));
+  }
 
-    // Find nearby events to cluster together
-    events.forEach((otherEvent) => {
+  const clusters: EventCluster[] = [];
+  const processedEvents = new Set<string>();
+
+  // Create a fresh copy of events to avoid mutations
+  const eventsCopy = [...events];
+
+  eventsCopy.forEach((event) => {
+    if (processedEvents.has(event.id)) return;
+
+    const nearbyEvents = [event];
+    processedEvents.add(event.id);
+
+    // Find all nearby events for this cluster
+    eventsCopy.forEach((otherEvent) => {
       if (otherEvent.id !== event.id && !processedEvents.has(otherEvent.id)) {
         const distance = getDistance(
           event.latitude,
@@ -86,37 +118,38 @@ function clusterEvents(
         );
 
         if (distance <= clusterRadius) {
-          cluster.events.push(otherEvent);
+          nearbyEvents.push(otherEvent);
           processedEvents.add(otherEvent.id);
         }
       }
     });
 
     // Calculate cluster center (average of all event coordinates)
-    if (cluster.events.length > 1) {
-      const totalLat = cluster.events.reduce((sum, e) => sum + e.latitude, 0);
-      const totalLng = cluster.events.reduce((sum, e) => sum + e.longitude, 0);
-      cluster.centerLatitude = totalLat / cluster.events.length;
-      cluster.centerLongitude = totalLng / cluster.events.length;
-    }
+    const totalLat = nearbyEvents.reduce((sum, e) => sum + e.latitude, 0);
+    const totalLng = nearbyEvents.reduce((sum, e) => sum + e.longitude, 0);
+    const centerLatitude = totalLat / nearbyEvents.length;
+    const centerLongitude = totalLng / nearbyEvents.length;
 
-    // Mark as hot if any event in cluster is hot or if cluster has many events
-    cluster.isHot =
-      cluster.events.some((e) => e.is_hot) || cluster.events.length >= 3;
+    // Create the cluster
+    const cluster: EventCluster = {
+      id: `cluster_${
+        nearbyEvents.length > 1 ? centerLatitude.toFixed(6) : event.id
+      }`,
+      events: nearbyEvents,
+      centerLatitude,
+      centerLongitude,
+      isHot: nearbyEvents.some((e) => e.is_hot) || nearbyEvents.length >= 3,
+    };
 
     clusters.push(cluster);
-    processedEvents.add(event.id);
   });
 
   console.log("🔗 Event clustering complete:", {
     originalEvents: events.length,
     clusters: clusters.length,
-    clusterSummary: clusters.map((c) => ({
-      id: c.id,
-      eventCount: c.events.length,
-      isHot: c.isHot,
-      center: { lat: c.centerLatitude, lng: c.centerLongitude },
-    })),
+    clusterRadius: clusterRadius,
+    averageClusterSize:
+      clusters.length > 0 ? (events.length / clusters.length).toFixed(1) : 0,
   });
 
   return clusters;
@@ -126,106 +159,112 @@ export default function MapScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
   const router = useRouter();
-  const mapRef = useRef<MapView>(null);
 
-  // State for map data
+  // State management
   const [events, setEvents] = useState<Event[]>([]);
   const [eventClusters, setEventClusters] = useState<EventCluster[]>([]);
+  const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [locationPermission, setLocationPermission] = useState<boolean | null>(
     null
   );
-  const [loading, setLoading] = useState(true);
 
-  // Request location permission and get current location
+  const mapRef = useRef<MapView>(null);
+  const regionChangeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced function to recalculate clusters
+  const recalculateClusters = useCallback(
+    (newRegion: Region, eventsData: Event[]) => {
+      try {
+        if (!eventsData || eventsData.length === 0) {
+          setEventClusters([]);
+          return;
+        }
+
+        const clusterRadius = getClusterRadiusForZoom(newRegion.latitudeDelta);
+        console.log(
+          `🔍 Recalculating clusters - zoom: ${newRegion.latitudeDelta.toFixed(
+            4
+          )}, radius: ${clusterRadius}m`
+        );
+
+        const newClusters = clusterEvents(eventsData, clusterRadius);
+        setEventClusters(newClusters);
+      } catch (error) {
+        console.error("❌ Error recalculating clusters:", error);
+      }
+    },
+    []
+  );
+
+  // Debounced region change handler to prevent crashes
+  const handleRegionChangeComplete = useCallback(
+    (newRegion: Region) => {
+      // Clear any existing timeout
+      if (regionChangeTimeoutRef.current) {
+        clearTimeout(regionChangeTimeoutRef.current);
+      }
+
+      // Update region immediately for map display
+      setRegion(newRegion);
+
+      // Debounce cluster recalculation to prevent performance issues
+      regionChangeTimeoutRef.current = setTimeout(() => {
+        recalculateClusters(newRegion, events);
+      }, 300); // 300ms debounce
+    },
+    [events, recalculateClusters]
+  );
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (regionChangeTimeoutRef.current) {
+        clearTimeout(regionChangeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Initialize map and load events
   useEffect(() => {
     (async () => {
       console.log("🗺️ MapScreen: Starting initialization...");
 
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      setLocationPermission(status === "granted");
+      // Request location permissions
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        setLocationPermission(status === "granted");
 
-      if (status === "granted") {
-        try {
-          const location = await Location.getCurrentPositionAsync({});
-          console.log("📍 User location found:", {
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-          });
-
-          setRegion({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.015,
-            longitudeDelta: 0.0121,
-          });
-        } catch (error) {
-          console.log("❌ Error getting location:", error);
+        if (status === "granted") {
+          console.log("📍 Location permission granted");
+        } else {
+          console.log("❌ Location permission denied");
         }
+      } catch (error) {
+        console.log("❌ Error requesting location permission:", error);
+        setLocationPermission(false);
       }
 
-      // Fetch events from Supabase
+      // Fetch events from database using our new simplified function
       try {
         console.log(
           "🔍 Fetching events with location data for filter:",
           selectedFilter
         );
 
-        const fetchedEvents = await fetchEventsWithLocation(
-          selectedFilter === "all" ? undefined : selectedFilter
-        );
+        const fetchedEvents = await getEventsWithLocation(selectedFilter);
 
-        console.log("✅ Raw events fetched from database:", {
+        console.log("✅ Events fetched:", {
           count: fetchedEvents?.length || 0,
-          events:
-            fetchedEvents?.map((event) => ({
-              id: event.id,
-              title: event.title,
-              latitude: event.latitude,
-              longitude: event.longitude,
-              genre: event.genre,
-              is_hot: event.is_hot,
-              event_count: event.event_count,
-            })) || [],
         });
 
-        // Validate events have required location data
-        const validEvents = (fetchedEvents || []).filter((event) => {
-          const hasValidCoords =
-            event.latitude != null &&
-            event.longitude != null &&
-            !isNaN(event.latitude) &&
-            !isNaN(event.longitude);
+        setEvents(fetchedEvents);
 
-          if (!hasValidCoords) {
-            console.log("⚠️ Event missing valid coordinates:", {
-              id: event.id,
-              title: event.title,
-              latitude: event.latitude,
-              longitude: event.longitude,
-            });
-          }
-
-          return hasValidCoords;
-        });
-
-        console.log("✅ Valid events with coordinates:", {
-          validCount: validEvents.length,
-          totalCount: fetchedEvents?.length || 0,
-          validEvents: validEvents.map((event) => ({
-            id: event.id,
-            title: event.title,
-            coordinates: { lat: event.latitude, lng: event.longitude },
-            genre: event.genre,
-          })),
-        });
-
-        setEvents(validEvents);
-
-        // Create clusters for heatmap visualization
-        const clusters = clusterEvents(validEvents, 100); // 100 meter clustering radius
-        setEventClusters(clusters);
+        // Create initial clusters based on current zoom level
+        if (fetchedEvents.length > 0) {
+          await recalculateClusters(region, fetchedEvents);
+        }
       } catch (error) {
         console.error("❌ Error fetching events:", error);
         setEvents([]);
@@ -235,7 +274,7 @@ export default function MapScreen() {
       setLoading(false);
       console.log("🏁 MapScreen initialization complete");
     })();
-  }, [selectedFilter]);
+  }, [selectedFilter, recalculateClusters, region]);
 
   // Handle filter selection
   const handleFilterPress = (filterId: string) => {
@@ -250,15 +289,13 @@ export default function MapScreen() {
         const location = await Location.getCurrentPositionAsync({});
 
         if (mapRef.current) {
-          mapRef.current.animateToRegion(
-            {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.015,
-              longitudeDelta: 0.0121,
-            },
-            1000
-          );
+          const newRegion = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.015,
+            longitudeDelta: 0.0121,
+          };
+          mapRef.current.animateToRegion(newRegion, 1000);
         }
       } catch (error) {
         console.log("Error getting location:", error);
@@ -266,7 +303,7 @@ export default function MapScreen() {
     }
   };
 
-  // Handle cluster marker press
+  // Handle cluster marker press with enhanced behavior
   const handleClusterPress = (cluster: EventCluster) => {
     if (cluster.events.length === 1) {
       // Single event - go to event detail
@@ -277,7 +314,7 @@ export default function MapScreen() {
       );
       router.push(`/event/${cluster.events[0].id}`);
     } else {
-      // Multiple events - zoom into cluster or show list
+      // Multiple events - zoom in to break up the cluster
       console.log(
         "📍 Cluster marker tapped:",
         cluster.id,
@@ -287,15 +324,24 @@ export default function MapScreen() {
       );
 
       if (mapRef.current) {
-        mapRef.current.animateToRegion(
-          {
-            latitude: cluster.centerLatitude,
-            longitude: cluster.centerLongitude,
-            latitudeDelta: 0.005, // Zoom in closer
-            longitudeDelta: 0.005,
-          },
-          1000
+        // Calculate a smaller region to zoom into the cluster
+        const currentRadius = getClusterRadiusForZoom(region.latitudeDelta);
+        const zoomFactor = currentRadius > 100 ? 0.4 : 0.5; // Less aggressive zoom for smaller clusters
+
+        const newRegion = {
+          latitude: cluster.centerLatitude,
+          longitude: cluster.centerLongitude,
+          latitudeDelta: region.latitudeDelta * zoomFactor,
+          longitudeDelta: region.longitudeDelta * zoomFactor,
+        };
+
+        console.log(
+          `🔍 Zooming into cluster: ${region.latitudeDelta.toFixed(
+            4
+          )} -> ${newRegion.latitudeDelta.toFixed(4)}`
         );
+
+        mapRef.current.animateToRegion(newRegion, 1000);
       }
     }
   };
@@ -322,56 +368,53 @@ export default function MapScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
-      {/* Map Header */}
+      {/* Map Header - more compact */}
       <View style={styles.header}>
         <Text style={[Typography.headingMedium, { color: colors.text }]}>
           Event Map
         </Text>
         <Text
-          style={[Typography.caption, { color: colors.icon, marginTop: 4 }]}
+          style={[Typography.caption, { color: colors.icon, marginTop: 2 }]}
         >
-          {events.length} events in {eventClusters.length} clusters
+          {events.length} events • {eventClusters.length} clusters • Radius:{" "}
+          {getClusterRadiusForZoom(region.latitudeDelta)}m
         </Text>
       </View>
 
-      {/* Filter Tabs */}
-      <View style={styles.filterContainer}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScrollContent}
-        >
-          {musicGenres.map((filter) => (
-            <TouchableOpacity
-              key={filter.id}
+      {/* Filter Tabs - much more compact */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterContainer}
+        contentContainerStyle={styles.filterContent}
+      >
+        {musicGenres.map((genre) => (
+          <TouchableOpacity
+            key={genre.id}
+            style={[
+              styles.filterTab,
+              selectedFilter === genre.id && {
+                backgroundColor: colors.tint,
+              },
+            ]}
+            onPress={() => handleFilterPress(genre.id)}
+          >
+            <Text
               style={[
-                styles.filterOption,
+                Typography.bodySmall,
                 {
-                  backgroundColor:
-                    selectedFilter === filter.id
-                      ? colors.tint
-                      : colors.cardBackground,
-                  borderColor: colors.border,
+                  color: selectedFilter === genre.id ? "#FFF" : colors.text,
+                  fontWeight: selectedFilter === genre.id ? "600" : "400",
                 },
               ]}
-              onPress={() => handleFilterPress(filter.id)}
             >
-              <Text
-                style={[
-                  Typography.bodySmall,
-                  {
-                    color: selectedFilter === filter.id ? "#FFF" : colors.text,
-                  },
-                ]}
-              >
-                {filter.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+              {genre.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-      {/* Map View */}
+      {/* Map takes up remaining space */}
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -381,7 +424,7 @@ export default function MapScreen() {
         showsMyLocationButton={false}
         showsCompass={true}
         showsScale={true}
-        onRegionChangeComplete={setRegion}
+        onRegionChangeComplete={handleRegionChangeComplete}
       >
         {/* Clustered Event Markers */}
         {eventClusters.map((cluster) => {
@@ -432,30 +475,34 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 60,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 4, // Reduced from 8
   },
   filterContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    maxHeight: 44, // Fixed height to prevent expansion
+    paddingVertical: 4, // Reduced from 8
   },
-  filterScrollContent: {
-    paddingRight: 16,
-  },
-  filterOption: {
-    paddingVertical: 8,
+  filterContent: {
     paddingHorizontal: 16,
-    borderRadius: 20,
+    alignItems: "center", // Center vertically
+  },
+  filterTab: {
+    paddingVertical: 6, // Reduced from 8
+    paddingHorizontal: 12, // Reduced from 16
     marginRight: 8,
-    borderWidth: 1,
+    borderRadius: 16, // Slightly smaller radius
+    backgroundColor: "rgba(0,0,0,0.05)",
+    minHeight: 32, // Fixed minimum height
+    justifyContent: "center",
+    alignItems: "center",
   },
   map: {
-    flex: 1,
+    flex: 1, // This ensures the map takes up all remaining space
   },
   locationButton: {
     position: "absolute",
-    bottom: 30,
-    right: 16,
+    bottom: 20,
+    right: 20,
     width: 50,
     height: 50,
     borderRadius: 25,
@@ -463,8 +510,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
     elevation: 5,
   },
 });

@@ -175,7 +175,7 @@ export async function generateClustersFromDatabase(
         date: event.date || "Date TBD",
         location: event.location || "Location TBD",
         imageUrl:
-          event.img_path ||
+          event.imageUrl ||
           "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
         attendees: event.event_count || 1,
         isAttending: false, // This would need to be determined based on user data
@@ -406,26 +406,88 @@ export function refreshClusterCache(): void {
   cachedMapClusters = [];
 }
 
-// Helper function to get all events for the home screen (now from database)
-export async function getAllEvents() {
+// For map usage - get raw Event objects with location only
+export async function getEventsWithLocation(
+  filter: string = "all"
+): Promise<Event[]> {
   try {
-    const events = await fetchEvents();
-    return (
-      events?.map((event) => ({
-        id: event.id,
-        title: event.title,
-        date: event.date || "Date TBD",
-        location: event.location || "Location TBD",
-        imageUrl:
-          event.img_path ||
-          "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-        attendees: event.event_count || 1,
-      })) || []
+    const events = await fetchEvents(filter === "all" ? undefined : filter);
+
+    if (!events) return [];
+
+    // Filter for events with valid location data
+    const eventsWithLocation = events.filter(
+      (event) =>
+        event.latitude != null &&
+        event.longitude != null &&
+        !isNaN(event.latitude) &&
+        !isNaN(event.longitude)
     );
+
+    // Apply additional filtering for special cases
+    const filteredEvents = eventsWithLocation.filter((event) => {
+      if (filter === "today") {
+        const today = new Date().toDateString();
+        const eventDate = new Date(event.date || "").toDateString();
+        return eventDate === today;
+      }
+      if (filter === "weekend") {
+        const eventDate = new Date(event.date || "");
+        const dayOfWeek = eventDate.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      }
+      return true;
+    });
+
+    return filteredEvents; // Return raw Event objects for map usage
   } catch (error) {
-    console.error("Error fetching all events:", error);
+    console.error("Error fetching events with location:", error);
     return [];
   }
+}
+
+// Updated function to get events by filter for UI components
+export async function getFilteredEvents(filter: string) {
+  try {
+    const events = await fetchEvents(filter === "all" ? undefined : filter);
+
+    if (!events) return [];
+
+    // Apply additional filtering for special cases
+    const filteredEvents = events.filter((event) => {
+      if (filter === "today") {
+        const today = new Date().toDateString();
+        const eventDate = new Date(event.date || "").toDateString();
+        return eventDate === today;
+      }
+      if (filter === "weekend") {
+        const eventDate = new Date(event.date || "");
+        const dayOfWeek = eventDate.getDay();
+        return dayOfWeek === 0 || dayOfWeek === 6;
+      }
+      return true;
+    });
+
+    // Convert to UI format
+    return filteredEvents.map((event) => ({
+      id: event.id,
+      title: event.title,
+      date: event.date || "Date TBD",
+      location: event.location || "Location TBD",
+      imageUrl:
+        event.imageUrl ||
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
+      attendees: event.event_count || 1,
+    }));
+  } catch (error) {
+    console.error("Error fetching filtered events:", error);
+    return [];
+  }
+}
+
+// Simplified function for all events (UI format)
+export async function getAllEvents() {
+  return getFilteredEvents("all");
 }
 
 // Helper function to get event by id (now from database)
@@ -449,49 +511,6 @@ export async function getEventById(id: string): Promise<Event | null> {
   }
 }
 
-// Helper function to get events by filter (now from database)
-export async function getFilteredEvents(filter: string) {
-  try {
-    if (filter === "all") {
-      return await getAllEvents();
-    }
-
-    const events = await fetchEvents(filter === "all" ? undefined : filter);
-
-    if (!events) return [];
-
-    // Apply additional filtering for special cases
-    const filteredEvents = events.filter((event) => {
-      if (filter === "today") {
-        // Simple date filter - in a real app, you'd use proper date filtering
-        const today = new Date().toDateString();
-        const eventDate = new Date(event.date || "").toDateString();
-        return eventDate === today;
-      }
-      if (filter === "weekend") {
-        const eventDate = new Date(event.date || "");
-        const dayOfWeek = eventDate.getDay();
-        return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
-      }
-      return true; // For genre filters, this is already handled by fetchEvents
-    });
-
-    return filteredEvents.map((event) => ({
-      id: event.id,
-      title: event.title,
-      date: event.date || "Date TBD",
-      location: event.location || "Location TBD",
-      imageUrl:
-        event.img_path ||
-        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-      attendees: event.event_count || 1,
-    }));
-  } catch (error) {
-    console.error("Error fetching filtered events:", error);
-    return [];
-  }
-}
-
 // Generate a new event ID (now UUID-based since database uses UUIDs)
 export function generateEventId(): string {
   // Since the database uses UUIDs, we'll let the database generate the ID
@@ -504,7 +523,6 @@ export function generateEventId(): string {
 // Interface for new event data
 export interface NewEventData {
   time: any;
-  imageUrl: string;
   coordinates: any;
   title: string;
   date: string;
@@ -515,7 +533,7 @@ export interface NewEventData {
   event_visibility?: boolean;
   latitude: number;
   longitude: number;
-  img_path: string;
+  imageUrl: string;
 }
 
 // Updated addNewEvent function to work entirely with database

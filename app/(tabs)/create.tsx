@@ -19,6 +19,37 @@ export default function CreateEventScreen() {
   const [coverImage, setCoverImage] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Helper function to upload image to Supabase Storage
+  const uploadImageToStorage = async (imageUri: string): Promise<string> => {
+    const response = await fetch(imageUri);
+    const blob = await response.blob();
+
+    // Create a unique filename
+    const fileExt = imageUri.split(".").pop() || "jpg";
+    const fileName = `event-cover-${Date.now()}.${fileExt}`;
+    const filePath = `event-covers/${fileName}`;
+
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from("event-images")
+      .upload(filePath, blob, {
+        contentType: `image/${fileExt}`,
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
+
+    // Get the public URL
+    const { data: urlData } = supabase.storage
+      .from("event-images")
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  };
+
   // Handle form submission
   const handleSubmit = async (data: EventFormData) => {
     // Prevent double submission
@@ -26,29 +57,55 @@ export default function CreateEventScreen() {
 
     setIsSubmitting(true);
 
-    // Prepare event data for creation
-    const newEventData: NewEventData = {
-      title: data.title,
-      date: data.date + data.time,
-      location: data.location,
-      description: data.description,
-      created_by: "0",
-      genre: data.genre || "",
-      latitude: data.coordinates.latitude,
-      longitude: data.coordinates.longitude,
-      img_path:
-        coverImage ||
-        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30", // Default image if none selected
-    };
-
     try {
+      let imageUrl =
+        "https://images.unsplash.com/photo-1492684223066-81342ee5ff30"; // Default image
+
+      // Upload cover image if one was selected
+      if (coverImage) {
+        imageUrl = await uploadImageToStorage(coverImage);
+      }
+
+      // Prepare event data for creation - fixing the type mapping
+      const newEventData: NewEventData = {
+        title: data.title,
+        date: data.date,
+        time: data.time,
+        location: data.location,
+        description: data.description,
+        created_by: "0",
+        genre: data.genre || "",
+        coordinates: data.coordinates,
+        latitude: data.coordinates.latitude,
+        longitude: data.coordinates.longitude,
+        imageUrl: imageUrl,
+      };
+
       // Add the event to our central data store
       const newEventId = addNewEvent(newEventData);
 
       //adding the event to the table
-      const { data, error } = await supabase
+      const { data: insertData, error } = await supabase
         .from("events")
-        .insert([newEventData]);
+        .insert([
+          {
+            title: newEventData.title,
+            date: newEventData.date + newEventData.time,
+            location: newEventData.location,
+            description: newEventData.description,
+            created_by: newEventData.created_by,
+            genre: newEventData.genre,
+            latitude: newEventData.latitude,
+            longitude: newEventData.longitude,
+            imageUrl: newEventData.imageUrl,
+          },
+        ])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
 
       // Show success message
       Alert.alert(
@@ -57,7 +114,7 @@ export default function CreateEventScreen() {
         [
           {
             text: "View Event",
-            onPress: () => router.push(`/event/${newEventId}`),
+            onPress: () => router.push(`/event/${insertData.id}`),
           },
           {
             text: "Create Another",

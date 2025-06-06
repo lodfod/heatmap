@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
@@ -14,7 +14,27 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // State for events data
-  const [events, setEvents] = useState(getAllEvents());
+  const [events, setEvents] = useState([]);
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const allEvents = await getAllEvents();
+        console.log("📱 Home: Loaded events:", allEvents.length);
+
+        // Debug log for first few events to check image URLs
+        allEvents.slice(0, 3).forEach((event, index) => {
+          console.log(`📷 Event ${index + 1} image URL:`, event.imageUrl);
+        });
+
+        setEvents(allEvents);
+      } catch (error) {
+        console.error("❌ Home: Error loading events:", error);
+        setEvents([]);
+      }
+    };
+    loadEvents();
+  }, []);
 
   // Handle RSVP action
   const handleRSVP = (id: string) => {

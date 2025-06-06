@@ -66,7 +66,7 @@ export default function EventDetailScreen() {
           const uiEvent: EventDetails = {
             ...dbEvent,
             imageUrl:
-              dbEvent.img_path ||
+              dbEvent.imageUrl ||
               "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
             organizer: "Event Organizer", // Default organizer since it's not in DB
             attendees: [], // Default empty array for attendees
@@ -118,7 +118,7 @@ export default function EventDetailScreen() {
     // In a real app, this would upload the photo to a server
     // and then update the event with the new photo URL
 
-    // For this demo, we'll just add it to the local state
+    // Store photos locally for now
     setEvent({
       ...event,
       photos: [photoUri, ...(event.photos || [])],
@@ -221,17 +221,21 @@ export default function EventDetailScreen() {
               {event.title}
             </Text>
 
-            <TouchableOpacity
-              style={[
-                styles.attendButton,
-                { backgroundColor: isAttending ? colors.success : colors.tint },
-              ]}
-              onPress={toggleAttendance}
-            >
-              <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
-                {isAttending ? "Attending" : "Attend"}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ paddingVertical: 10 }}>
+              <TouchableOpacity
+                style={[
+                  styles.attendButton,
+                  {
+                    backgroundColor: isAttending ? colors.success : colors.tint,
+                  },
+                ]}
+                onPress={toggleAttendance}
+              >
+                <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
+                  {isAttending ? "Attending" : "Attend"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.infoContainer}>
@@ -509,7 +513,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   headerContainer: {
-    flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,

@@ -27,7 +27,7 @@ export interface Event {
   // Additional fields that might be in the database
   date?: string;
   location?: string;
-  img_path?: string;
+  imageUrl?: string;
   created_by?: string;
   event_visibility?: boolean;
 }

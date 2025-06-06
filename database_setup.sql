@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.events (
     date TEXT,
     location TEXT,
     created_by TEXT,
-    img_path TEXT,
+    imageUrl TEXT,
     event_visibility BOOLEAN DEFAULT true
 );
 
