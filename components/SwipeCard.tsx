@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
 import React, { useRef, useState } from "react";
 import {
   Animated,
@@ -31,20 +30,19 @@ export interface EventData {
 
 interface SwipeCardProps {
   data: EventData[];
-  onSwipeLeft: (item: EventData) => void;
-  onSwipeRight: (item: EventData) => void;
+  onSwipeRight?: (item: EventData) => void;
+  onSwipeLeft?: (item: EventData) => void;
   renderNoMoreCards: () => React.ReactNode;
 }
 
 export function SwipeCard({
   data,
-  onSwipeLeft,
   onSwipeRight,
+  onSwipeLeft,
   renderNoMoreCards,
 }: SwipeCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
-  const router = useRouter();
 
   // Keep track of the current card index
   const [cardIndex, setCardIndex] = useState(0);
@@ -110,18 +108,19 @@ export function SwipeCard({
   const onSwipeComplete = (direction: "left" | "right") => {
     const item = data[cardIndex];
 
-    direction === "right" ? onSwipeRight(item) : onSwipeLeft(item);
+    // Call the parent component's callback if provided
+    if (direction === "right" && onSwipeRight) {
+      onSwipeRight(item);
+    } else if (direction === "left" && onSwipeLeft) {
+      onSwipeLeft(item);
+    }
 
-    // Reset position for next card
+    // Move to next card and reset state
+    setCardIndex((prev) => prev + 1);
+
+    // Reset position for next card AFTER state update
     position.setValue({ x: 0, y: 0 });
-
-    // Move to next card
-    setCardIndex(cardIndex + 1);
-
-    // Reset swipe in progress flag after animation completes
-    setTimeout(() => {
-      setIsSwipingInProgress(false);
-    }, 100);
+    setIsSwipingInProgress(false);
   };
 
   // Calculate card rotation based on position
@@ -144,11 +143,6 @@ export function SwipeCard({
     if (!isSwipingInProgress) {
       forceSwipe(direction);
     }
-  };
-
-  // Navigate to event details
-  const goToEventDetails = (id: string) => {
-    router.push(`/event/${id}`);
   };
 
   // If we've gone through all cards
@@ -198,11 +192,7 @@ export function SwipeCard({
               ]}
               {...panResponder.panHandlers}
             >
-              <CardContent
-                item={item}
-                colors={colors}
-                onPress={() => goToEventDetails(item.id)}
-              />
+              <CardContent item={item} colors={colors} />
             </Animated.View>
           );
         })
@@ -238,21 +228,15 @@ export function SwipeCard({
   );
 }
 
-// Card content component
+// Card content component - simplified without pressable functionality
 interface CardContentProps {
   item: EventData;
   colors: typeof Colors.light;
-  onPress?: () => void;
 }
 
-function CardContent({ item, colors, onPress }: CardContentProps) {
+function CardContent({ item, colors }: CardContentProps) {
   return (
-    <TouchableOpacity
-      style={styles.cardContent}
-      onPress={onPress}
-      activeOpacity={0.9}
-      disabled={!onPress}
-    >
+    <View style={styles.cardContent}>
       {/* Event Image */}
       <Image
         source={{ uri: item.imageUrl }}
@@ -288,17 +272,8 @@ function CardContent({ item, colors, onPress }: CardContentProps) {
             </Text>
           )}
         </View>
-
-        {onPress && (
-          <View style={styles.seeMoreContainer}>
-            <Text style={[Typography.buttonSmall, { color: "#FFF" }]}>
-              See Details
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#FFF" />
-          </View>
-        )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 }
 
@@ -365,10 +340,5 @@ const styles = StyleSheet.create({
   },
   acceptButton: {
     marginLeft: 20,
-  },
-  seeMoreContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
   },
 });

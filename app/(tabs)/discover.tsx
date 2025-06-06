@@ -2,10 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SwipeCard } from "../../components/SwipeCard";
+import { EventData, SwipeCard } from "../../components/SwipeCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
-import { EventDetails, getAllEvents } from "../../data/events";
+import { getAllEvents } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
 
 export default function DiscoverScreen() {
@@ -13,7 +13,7 @@ export default function DiscoverScreen() {
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
 
   // State for event data
-  const [events, setEvents] = useState<EventDetails[]>([]);
+  const [events, setEvents] = useState<EventData[]>([]);
   const [loading, setLoading] = useState(true);
 
   // State for liked and rejected events
@@ -52,14 +52,14 @@ export default function DiscoverScreen() {
   }, []);
 
   // Handle swipe right (like)
-  const handleSwipeRight = (item: any) => {
-    console.log("Liked event:", item.id);
+  const handleSwipeRight = (item: EventData) => {
+    console.log("✅ Liked event:", item.id, item.title);
     setLikedEvents([...likedEvents, item.id]);
   };
 
   // Handle swipe left (reject)
-  const handleSwipeLeft = (item: any) => {
-    console.log("Rejected event:", item.id);
+  const handleSwipeLeft = (item: EventData) => {
+    console.log("❌ Rejected event:", item.id, item.title);
     setRejectedEvents([...rejectedEvents, item.id]);
   };
 
@@ -145,8 +145,8 @@ export default function DiscoverScreen() {
       <View style={styles.swipeContainer}>
         <SwipeCard
           data={events}
-          onSwipeLeft={handleSwipeLeft}
           onSwipeRight={handleSwipeRight}
+          onSwipeLeft={handleSwipeLeft}
           renderNoMoreCards={renderNoMoreCards}
         />
       </View>
