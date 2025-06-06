@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from "react";
-import { LogBox, View } from "react-native";
+import React, { useRef, useState } from "react";
+import { View } from "react-native";
 import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import { Colors } from "../constants/Colors";
 import { useColorScheme } from "../hooks/useColorScheme";
@@ -25,14 +25,7 @@ export const LocationSearch: React.FC<Props> = ({
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
   const googlePlacesRef = useRef<any>(null);
-
-  useEffect(() => {
-    // Suppress VirtualizedList warning for GooglePlacesAutocomplete
-    LogBox.ignoreLogs([
-      "VirtualizedLists should never be nested inside plain ScrollViews",
-      "VirtualizedList: missing keys for items",
-    ]);
-  }, []);
+  const [selectionMade, setSelectionMade] = useState(false);
 
   return (
     <View style={{ width: "100%", zIndex: 1 }}>
@@ -44,14 +37,14 @@ export const LocationSearch: React.FC<Props> = ({
         enablePoweredByContainer={false}
         suppressDefaultStyles={false}
         keepResultsAfterBlur={true}
-        listViewDisplayed="auto"
+        listViewDisplayed={selectionMade ? false : "auto"}
         disableScroll={true}
         keyboardShouldPersistTaps="handled"
         query={{
           key: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY,
           language: "en",
           types: "establishment|geocode",
-          components: "country:us", // You can modify this or remove to allow worldwide
+          components: "country:us",
         }}
         textInputProps={{
           defaultValue: initialLocation,
@@ -61,19 +54,17 @@ export const LocationSearch: React.FC<Props> = ({
           returnKeyType: "search",
         }}
         onPress={(data, details = null) => {
-          console.log("Selected place data:", data);
-          console.log("Selected place details:", details);
+          if (details && details.geometry?.location) {
+            const fullAddress =
+  details.formatted_address ||
+  data.description ||
+  data.structured_formatting?.main_text ||
+  details.name ||
+  "Unknown Location";
 
-          if (details && details.geometry && details.geometry.location) {
-            // Use the main text from structured formatting if available, otherwise use description
-            const placeName =
-              data.structured_formatting?.main_text ||
-              data.description ||
-              details.name ||
-              "Unknown Location";
 
             const locationData: LocationData = {
-              name: placeName,
+              name: fullAddress,
               category: "Google Place",
               coordinates: {
                 latitude: details.geometry.location.lat,
@@ -81,12 +72,16 @@ export const LocationSearch: React.FC<Props> = ({
               },
             };
 
-            console.log("Processed location data:", locationData);
             onSelectLocation(locationData);
 
-            // Update the text input to show the selected place name
             if (googlePlacesRef.current) {
-              googlePlacesRef.current.setAddressText(placeName);
+              googlePlacesRef.current.setAddressText(fullAddress);
+
+              // Blur keyboard
+              googlePlacesRef.current?.textInput?.blur?.();
+
+              // Hide dropdown
+              setSelectionMade(true);
             }
           }
         }}
@@ -123,10 +118,7 @@ export const LocationSearch: React.FC<Props> = ({
             borderColor: colors.border,
             elevation: 5,
             shadowColor: colors.text,
-            shadowOffset: {
-              width: 0,
-              height: 2,
-            },
+            shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.1,
             shadowRadius: 3.84,
             zIndex: 1001,
@@ -155,9 +147,7 @@ export const LocationSearch: React.FC<Props> = ({
         }}
         debounce={300}
         nearbyPlacesAPI="GooglePlacesSearch"
-        GooglePlacesSearchQuery={{
-          rankby: "distance",
-        }}
+        GooglePlacesSearchQuery={{ rankby: "distance" }}
         filterReverseGeocodingByTypes={[
           "locality",
           "administrative_area_level_3",

@@ -148,7 +148,7 @@ export function EventForm({
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* Title Input */}
         <View style={styles.fieldContainer}>
           <Text
