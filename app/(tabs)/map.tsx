@@ -17,7 +17,7 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-import { Event, fetchEventsWithLocation } from "../../lib/supabase";
+import { fetchEvents } from "../../lib/supabase";
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -34,21 +34,13 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   // State for map data
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<any[]>([]);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
-  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
+  const [locationPermission, setLocationPermission] = useState<boolean | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
-
-  // Fetch events from Supabase
-  const fetchEvents = async (genre?: string) => {
-    try {
-      const data = await fetchEventsWithLocation(genre);
-      setEvents(data);
-    } catch (error) {
-      console.error('Error fetching events:', error);
-    }
-  };
 
   // Request location permission and get current location
   useEffect(() => {
@@ -70,21 +62,21 @@ export default function MapScreen() {
         }
       }
 
-      // Fetch initial events
-      await fetchEvents();
+      // Fetch events from Supabase
+      try {
+        const fetchedEvents = await fetchEvents(selectedFilter);
+        setEvents(fetchedEvents || []);
+      } catch (error) {
+        setEvents([]);
+      }
+
       setLoading(false);
     })();
-  }, []);
-
-  // Handle event press
-  const handleEventPress = (event: Event) => {
-    router.push(`/event/${event.id}`);
-  };
+  }, [selectedFilter]);
 
   // Handle filter selection
-  const handleFilterPress = async (filterId: string) => {
+  const handleFilterPress = (filterId: string) => {
     setSelectedFilter(filterId);
-    await fetchEvents(filterId);
   };
 
   // Go to user location
@@ -188,14 +180,21 @@ export default function MapScreen() {
         showsScale={true}
         onRegionChangeComplete={setRegion}
       >
-        {/* Event Markers */}
-        {events.map((event) => (
-          <MapMarker
-            key={event.id}
-            event={event}
-            onPress={() => handleEventPress(event)}
-          />
-        ))}
+        {/* Event Markers from Supabase */}
+        {events.map((event) =>
+          event.latitude && event.longitude ? (
+            <MapMarker
+              key={event.id}
+              cluster={{
+                id: event.id,
+                coordinate: { latitude: event.latitude, longitude: event.longitude },
+                count: 1,
+                isHot: false,
+              }}
+              onPress={() => router.push(`/event/${event.id}`)}
+            />
+          ) : null
+        )}
       </MapView>
 
       {/* Current Location Button */}
