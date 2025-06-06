@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
 import { EventForm, EventFormData } from "../../components/EventForm";
 import { ImagePickerComponent } from "../../components/ImagePickerComponent";
 import { Colors } from "../../constants/Colors";
@@ -147,7 +147,7 @@ export default function CreateEventScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <Text style={[Typography.headingLarge, { color: colors.text }]}>
             Create Event
@@ -175,7 +175,7 @@ export default function CreateEventScreen() {
           onSubmit={handleSubmit}
           submitButtonLabel={isSubmitting ? "Creating..." : "Create Event"}
         />
-      </ScrollView>
+      </View>
     </View>
   );
 }

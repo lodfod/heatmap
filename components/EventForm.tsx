@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import {
+  FlatList,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -143,259 +143,316 @@ export function EventForm({
     }
   };
 
+  const renderFormField = ({ item }: { item: any }) => {
+    switch (item.type) {
+      case "title":
+        return (
+          <View style={styles.fieldContainer}>
+            <Text
+              style={[
+                Typography.bodySmall,
+                styles.label,
+                { color: colors.text },
+              ]}
+            >
+              Event Title *
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  backgroundColor: colors.cardBackground,
+                  color: colors.text,
+                  borderColor: errors.title ? colors.error : colors.border,
+                },
+              ]}
+              value={formData.title}
+              onChangeText={(value) => handleChange("title", value)}
+              placeholder="Enter event title"
+              placeholderTextColor={colors.icon}
+            />
+            {errors.title ? (
+              <Text style={[Typography.caption, { color: colors.error }]}>
+                {errors.title}
+              </Text>
+            ) : null}
+          </View>
+        );
+      case "description":
+        return (
+          <View style={styles.fieldContainer}>
+            <Text
+              style={[
+                Typography.bodySmall,
+                styles.label,
+                { color: colors.text },
+              ]}
+            >
+              Description
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                styles.textArea,
+                {
+                  backgroundColor: colors.cardBackground,
+                  color: colors.text,
+                  borderColor: errors.description
+                    ? colors.error
+                    : colors.border,
+                },
+              ]}
+              value={formData.description}
+              onChangeText={(value) => handleChange("description", value)}
+              placeholder="Describe your event"
+              placeholderTextColor={colors.icon}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+          </View>
+        );
+      case "location":
+        return (
+          <View style={styles.fieldContainer}>
+            <Text
+              style={[
+                Typography.bodySmall,
+                styles.label,
+                { color: colors.text },
+              ]}
+            >
+              Location *
+            </Text>
+            <LocationSearch
+              onSelectLocation={handleLocationSelect}
+              initialLocation={formData.location}
+            />
+            {errors.location ? (
+              <Text style={[Typography.caption, { color: colors.error }]}>
+                {errors.location}
+              </Text>
+            ) : null}
+          </View>
+        );
+      case "datetime":
+        return (
+          <View style={styles.rowContainer}>
+            <View style={[styles.fieldContainer, { flex: 1, marginRight: 8 }]}>
+              <Text
+                style={[
+                  Typography.bodySmall,
+                  styles.label,
+                  { color: colors.text },
+                ]}
+              >
+                Date *
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.cardBackground,
+                    color: colors.text,
+                    borderColor: errors.date ? colors.error : colors.border,
+                  },
+                ]}
+                value={formData.date}
+                onChangeText={(value) => handleChange("date", value)}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor={colors.icon}
+              />
+              {errors.date ? (
+                <Text style={[Typography.caption, { color: colors.error }]}>
+                  {errors.date}
+                </Text>
+              ) : null}
+            </View>
+            <View style={[styles.fieldContainer, { flex: 1, marginLeft: 8 }]}>
+              <Text
+                style={[
+                  Typography.bodySmall,
+                  styles.label,
+                  { color: colors.text },
+                ]}
+              >
+                Time *
+              </Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: colors.cardBackground,
+                    color: colors.text,
+                    borderColor: errors.time ? colors.error : colors.border,
+                  },
+                ]}
+                value={formData.time}
+                onChangeText={(value) => handleChange("time", value)}
+                placeholder="HH:MM AM/PM"
+                placeholderTextColor={colors.icon}
+              />
+              {errors.time ? (
+                <Text style={[Typography.caption, { color: colors.error }]}>
+                  {errors.time}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      case "genre":
+        return (
+          <View style={styles.fieldContainer}>
+            <Text
+              style={[
+                Typography.bodySmall,
+                styles.label,
+                { color: colors.text },
+              ]}
+            >
+              Genre
+            </Text>
+            <View style={styles.genreContainer}>
+              {genreOptions.map((genre) => (
+                <TouchableOpacity
+                  key={genre.id}
+                  style={[
+                    styles.genreOption,
+                    {
+                      backgroundColor:
+                        formData.genre === genre.id
+                          ? colors.tint
+                          : colors.cardBackground,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={() => handleGenreSelect(genre.id)}
+                >
+                  <Text
+                    style={[
+                      Typography.bodySmall,
+                      {
+                        color:
+                          formData.genre === genre.id ? "#FFF" : colors.text,
+                      },
+                    ]}
+                  >
+                    {genre.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        );
+      case "visibility":
+        return (
+          <View style={styles.fieldContainer}>
+            <Text
+              style={[
+                Typography.bodySmall,
+                styles.label,
+                { color: colors.text },
+              ]}
+            >
+              Event Visibility
+            </Text>
+            <View style={styles.toggleContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.toggleOption,
+                  {
+                    backgroundColor: formData.isPublic
+                      ? colors.tint
+                      : colors.cardBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => handleChange("isPublic", true)}
+              >
+                <Text
+                  style={[
+                    Typography.bodySmall,
+                    { color: formData.isPublic ? "#FFF" : colors.text },
+                  ]}
+                >
+                  Public
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.toggleOption,
+                  {
+                    backgroundColor: !formData.isPublic
+                      ? colors.tint
+                      : colors.cardBackground,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={() => handleChange("isPublic", false)}
+              >
+                <Text
+                  style={[
+                    Typography.bodySmall,
+                    { color: !formData.isPublic ? "#FFF" : colors.text },
+                  ]}
+                >
+                  Private
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      case "submit":
+        return (
+          <>
+            <TouchableOpacity
+              style={[styles.submitButton, { backgroundColor: colors.tint }]}
+              onPress={handleSubmit}
+            >
+              <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
+                {submitButtonLabel}
+              </Text>
+            </TouchableOpacity>
+            <View style={{ height: 100 }} />
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const formFields = [
+    { type: "title", key: "title" },
+    { type: "description", key: "description" },
+    { type: "location", key: "location" },
+    { type: "datetime", key: "datetime" },
+    { type: "genre", key: "genre" },
+    { type: "visibility", key: "visibility" },
+    { type: "submit", key: "submit" },
+  ];
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* Title Input */}
-        <View style={styles.fieldContainer}>
-          <Text
-            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
-          >
-            Event Title *
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              {
-                backgroundColor: colors.cardBackground,
-                color: colors.text,
-                borderColor: errors.title ? colors.error : colors.border,
-              },
-            ]}
-            value={formData.title}
-            onChangeText={(value) => handleChange("title", value)}
-            placeholder="Enter event title"
-            placeholderTextColor={colors.icon}
-          />
-          {errors.title ? (
-            <Text style={[Typography.caption, { color: colors.error }]}>
-              {errors.title}
-            </Text>
-          ) : null}
-        </View>
-
-        {/* Description Input */}
-        <View style={styles.fieldContainer}>
-          <Text
-            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
-          >
-            Description
-          </Text>
-          <TextInput
-            style={[
-              styles.input,
-              styles.textArea,
-              {
-                backgroundColor: colors.cardBackground,
-                color: colors.text,
-                borderColor: errors.description ? colors.error : colors.border,
-              },
-            ]}
-            value={formData.description}
-            onChangeText={(value) => handleChange("description", value)}
-            placeholder="Describe your event"
-            placeholderTextColor={colors.icon}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-          />
-        </View>
-
-        {/* Location Search */}
-        <View style={styles.fieldContainer}>
-          <Text
-            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
-          >
-            Location *
-          </Text>
-          <LocationSearch
-            onSelectLocation={handleLocationSelect}
-            initialLocation={formData.location}
-          />
-          {errors.location ? (
-            <Text style={[Typography.caption, { color: colors.error }]}>
-              {errors.location}
-            </Text>
-          ) : null}
-        </View>
-
-        {/* Date & Time Inputs */}
-        <View style={styles.rowContainer}>
-          {/* Date Input */}
-          <View style={[styles.fieldContainer, { flex: 1, marginRight: 8 }]}>
-            <Text
-              style={[
-                Typography.bodySmall,
-                styles.label,
-                { color: colors.text },
-              ]}
-            >
-              Date *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.cardBackground,
-                  color: colors.text,
-                  borderColor: errors.date ? colors.error : colors.border,
-                },
-              ]}
-              value={formData.date}
-              onChangeText={(value) => handleChange("date", value)}
-              placeholder="MM/DD/YYYY"
-              placeholderTextColor={colors.icon}
-            />
-            {errors.date ? (
-              <Text style={[Typography.caption, { color: colors.error }]}>
-                {errors.date}
-              </Text>
-            ) : null}
-          </View>
-
-          {/* Time Input */}
-          <View style={[styles.fieldContainer, { flex: 1, marginLeft: 8 }]}>
-            <Text
-              style={[
-                Typography.bodySmall,
-                styles.label,
-                { color: colors.text },
-              ]}
-            >
-              Time *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: colors.cardBackground,
-                  color: colors.text,
-                  borderColor: errors.time ? colors.error : colors.border,
-                },
-              ]}
-              value={formData.time}
-              onChangeText={(value) => handleChange("time", value)}
-              placeholder="HH:MM AM/PM"
-              placeholderTextColor={colors.icon}
-            />
-            {errors.time ? (
-              <Text style={[Typography.caption, { color: colors.error }]}>
-                {errors.time}
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Genre Selection */}
-        <View style={styles.fieldContainer}>
-          <Text
-            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
-          >
-            Genre
-          </Text>
-          <View style={styles.genreContainer}>
-            {genreOptions.map((genre) => (
-              <TouchableOpacity
-                key={genre.id}
-                style={[
-                  styles.genreOption,
-                  {
-                    backgroundColor:
-                      formData.genre === genre.id
-                        ? colors.tint
-                        : colors.cardBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={() => handleGenreSelect(genre.id)}
-              >
-                <Text
-                  style={[
-                    Typography.bodySmall,
-                    {
-                      color: formData.genre === genre.id ? "#FFF" : colors.text,
-                    },
-                  ]}
-                >
-                  {genre.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Public/Private Toggle */}
-        <View style={styles.fieldContainer}>
-          <Text
-            style={[Typography.bodySmall, styles.label, { color: colors.text }]}
-          >
-            Event Visibility
-          </Text>
-          <View style={styles.toggleContainer}>
-            <TouchableOpacity
-              style={[
-                styles.toggleOption,
-                {
-                  backgroundColor: formData.isPublic
-                    ? colors.tint
-                    : colors.cardBackground,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={() => handleChange("isPublic", true)}
-            >
-              <Text
-                style={[
-                  Typography.bodySmall,
-                  { color: formData.isPublic ? "#FFF" : colors.text },
-                ]}
-              >
-                Public
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.toggleOption,
-                {
-                  backgroundColor: !formData.isPublic
-                    ? colors.tint
-                    : colors.cardBackground,
-                  borderColor: colors.border,
-                },
-              ]}
-              onPress={() => handleChange("isPublic", false)}
-            >
-              <Text
-                style={[
-                  Typography.bodySmall,
-                  { color: !formData.isPublic ? "#FFF" : colors.text },
-                ]}
-              >
-                Private
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Submit Button */}
-        <TouchableOpacity
-          style={[styles.submitButton, { backgroundColor: colors.tint }]}
-          onPress={handleSubmit}
-        >
-          <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
-            {submitButtonLabel}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+      <FlatList
+        data={formFields}
+        renderItem={renderFormField}
+        keyExtractor={(item) => item.key}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.formContainer}
+      />
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  formContainer: {
     padding: 16,
   },
   fieldContainer: {
