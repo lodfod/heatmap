@@ -1,60 +1,35 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { StyleSheet } from "react-native";
 import { Marker } from "react-native-maps";
 import { Colors } from "../constants/Colors";
-import { Typography } from "../constants/Typography";
-import { EventMapCluster } from "../data/events";
 import { useColorScheme } from "../hooks/useColorScheme";
+import { Event } from "../lib/supabase";
 
 /**
  * Component props
  */
 interface MapMarkerProps {
-  cluster: EventMapCluster;
-  onPress: (cluster: EventMapCluster) => void;
+  event: Event;
+  onPress: () => void;
 }
 
-export function MapMarker({ cluster, onPress }: MapMarkerProps) {
+export function MapMarker({ event, onPress }: MapMarkerProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
 
-  // Calculate marker size based on event count (min 40, max 70)
-  const size = Math.min(70, Math.max(40, 40 + cluster.count * 2));
-
-  // Determine color based on 'hotness'
-  const markerColor = cluster.isHot
-    ? colors.tint // Hot events
-    : colors.accent3; // Regular events
-
-  // Handle marker press
-  const handlePress = () => {
-    onPress(cluster);
-  };
-
   return (
     <Marker
-      coordinate={cluster.coordinate}
-      onPress={handlePress}
-      tracksViewChanges={false}
+      coordinate={{
+        latitude: event.latitude,
+        longitude: event.longitude,
+      }}
+      onPress={onPress}
     >
-      <View
-        style={[
-          styles.marker,
-          {
-            backgroundColor: markerColor,
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            opacity: cluster.isHot ? 1 : 0.7,
-          },
-        ]}
-      >
-        {cluster.count > 1 ? (
-          <Text style={[Typography.bodyMedium, styles.markerText]}>
-            {cluster.count}
-          </Text>
-        ) : null}
-      </View>
+      <Ionicons
+        name={event.is_hot ? "flame" : "location"}
+        size={24}
+        color={event.is_hot ? colors.tint : colors.text}
+      />
     </Marker>
   );
 }

@@ -10,6 +10,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// Type definition for event with location
+export interface Event {
+  id: string;
+  title: string;
+  description: string;
+  genre: string;
+  latitude: number;
+  longitude: number;
+  event_count: number;
+  is_hot: boolean;
+  created_at: string;
+}
+
 // Helper function to fetch events with optional genre filter
 export async function fetchEvents(genre?: string) {
   let query = supabase
@@ -28,6 +41,28 @@ export async function fetchEvents(genre?: string) {
   }
 
   return data;
+}
+
+// Helper function to fetch events with location data
+export async function fetchEventsWithLocation(genre?: string) {
+  let query = supabase
+    .from('events')
+    .select('*')
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null);
+
+  if (genre && genre !== 'all') {
+    query = query.eq('genre', genre);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching events with location:', error);
+    throw error;
+  }
+
+  return data as Event[];
 }
 
 // Helper function to create a new event

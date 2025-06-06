@@ -17,7 +17,7 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-import { fetchEvents } from "../../lib/supabase";
+import { Event, fetchEventsWithLocation } from "../../lib/supabase";
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -27,25 +27,6 @@ const initialRegion = {
   longitudeDelta: 0.0121,
 };
 
-interface Event {
-  id: string;
-  title: string;
-  latitude: number;
-  longitude: number;
-  genre?: string;
-  attendee_count: number;
-}
-
-interface EventMapCluster {
-  id: string;
-  coordinate: {
-    latitude: number;
-    longitude: number;
-  };
-  count: number;
-  isHot: boolean;
-}
-
 export default function MapScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
@@ -54,49 +35,20 @@ export default function MapScreen() {
 
   // State for map data
   const [events, setEvents] = useState<Event[]>([]);
-  const [clusters, setClusters] = useState<EventMapCluster[]>([]);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch events from Supabase
-  useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const data = await fetchEvents(selectedFilter !== "all" ? selectedFilter : undefined);
-        setEvents(data || []);
-        
-        // Transform events into clusters
-        const eventClusters = data?.reduce((acc: { [key: string]: EventMapCluster }, event) => {
-          const key = `${event.latitude},${event.longitude}`;
-          if (!acc[key]) {
-            acc[key] = {
-              id: key,
-              coordinate: {
-                latitude: event.latitude,
-                longitude: event.longitude,
-              },
-              count: 0,
-              isHot: false,
-            };
-          }
-          acc[key].count += 1;
-          // Consider a cluster "hot" if it has more than 3 events
-          acc[key].isHot = acc[key].count > 3;
-          return acc;
-        }, {}) || {};
-
-        setClusters(Object.values(eventClusters));
-      } catch (error) {
-        console.error("Error loading events:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadEvents();
-  }, [selectedFilter]);
+  const fetchEvents = async (genre?: string) => {
+    try {
+      const data = await fetchEventsWithLocation(genre);
+      setEvents(data);
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    }
+  };
 
   // Request location permission and get current location
   useEffect(() => {
@@ -118,32 +70,21 @@ export default function MapScreen() {
         }
       }
 
+      // Fetch initial events
+      await fetchEvents();
       setLoading(false);
     })();
   }, []);
 
-  // Handle cluster press
-  const handleClusterPress = (cluster: EventMapCluster) => {
-    // Find all events in this cluster
-    const clusterEvents = events.filter(
-      event => 
-        event.latitude === cluster.coordinate.latitude && 
-        event.longitude === cluster.coordinate.longitude
-    );
-    
-    // Navigate to cluster details with the events
-    router.push({
-      pathname: "/cluster/[id]",
-      params: { 
-        id: cluster.id,
-        events: JSON.stringify(clusterEvents)
-      }
-    });
+  // Handle event press
+  const handleEventPress = (event: Event) => {
+    router.push(`/event/${event.id}`);
   };
 
   // Handle filter selection
-  const handleFilterPress = (filterId: string) => {
+  const handleFilterPress = async (filterId: string) => {
     setSelectedFilter(filterId);
+    await fetchEvents(filterId);
   };
 
   // Go to user location
@@ -247,12 +188,12 @@ export default function MapScreen() {
         showsScale={true}
         onRegionChangeComplete={setRegion}
       >
-        {/* Event Cluster Markers */}
-        {clusters.map((cluster) => (
+        {/* Event Markers */}
+        {events.map((event) => (
           <MapMarker
-            key={cluster.id}
-            cluster={cluster}
-            onPress={handleClusterPress}
+            key={event.id}
+            event={event}
+            onPress={() => handleEventPress(event)}
           />
         ))}
       </MapView>
