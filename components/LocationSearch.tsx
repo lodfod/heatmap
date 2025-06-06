@@ -1,96 +1,82 @@
+import React from "react";
+import { View } from "react-native";
+import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
+
+export interface LocationData {
+  name: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  category: string;
+}
+
+interface Props {
+  onSelectLocation: (location: LocationData) => void;
+  initialLocation?: string;
+}
+
+export const LocationSearch: React.FC<Props> = ({
+  onSelectLocation,
+  initialLocation = "",
+}) => {
+  return (
+    <View style={{ flex: 1 }}>
+      <GooglePlacesAutocomplete
+  placeholder="Search for a location"
+  minLength={2}
+  fetchDetails={true}
+  query={{
+    key: "YOUR_GOOGLE_MAPS_API_KEY",
+    language: "en",
+  }}
+  textInputProps={{
+    defaultValue: initialLocation,
+  }}
+  onPress={(data, details = null) => {
+    if (details) {
+      const locationData: LocationData = {
+        name: data.description,
+        category: "Google Place",
+        coordinates: {
+          latitude: details.geometry.location.lat,
+          longitude: details.geometry.location.lng,
+        },
+      };
+      onSelectLocation(locationData);
+    }
+  }}
+  styles={{
+    textInput: {
+      height: 50,
+      borderColor: "#ccc",
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: 16,
+    },
+  }}
+/>
+
+    </View>
+  );
+};
+
+
+{/*
 import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  VirtualizedList,
 } from "react-native";
 import { Colors } from "../constants/Colors";
 import { Typography } from "../constants/Typography";
 import { useColorScheme } from "../hooks/useColorScheme";
-
-// Stanford campus locations with coordinates
-const stanfordLocations = [
-  {
-    name: "Kappa Sigma",
-    coordinates: { latitude: 37.427619, longitude: -122.170732 },
-    category: "Greek Life",
-  },
-  {
-    name: "Sigma Nu",
-    coordinates: { latitude: 37.426583, longitude: -122.169631 },
-    category: "Greek Life",
-  },
-  {
-    name: "White Plaza",
-    coordinates: { latitude: 37.426975, longitude: -122.169328 },
-    category: "Campus Landmark",
-  },
-  {
-    name: "Bing Concert Hall",
-    coordinates: { latitude: 37.432501, longitude: -122.166418 },
-    category: "Performance Venue",
-  },
-  {
-    name: "Tresidder Union",
-    coordinates: { latitude: 37.424125, longitude: -122.166427 },
-    category: "Student Center",
-  },
-  {
-    name: "Meyer Green",
-    coordinates: { latitude: 37.426054, longitude: -122.168395 },
-    category: "Outdoor Space",
-  },
-  {
-    name: "Narnia (Row House)",
-    coordinates: { latitude: 37.421952, longitude: -122.164913 },
-    category: "Student Housing",
-  },
-  {
-    name: "Toussaint House (Row)",
-    coordinates: { latitude: 37.422235, longitude: -122.165611 },
-    category: "Student Housing",
-  },
-  {
-    name: "CCRMA",
-    coordinates: { latitude: 37.430016, longitude: -122.163778 },
-    category: "Academic Building",
-  },
-  {
-    name: "Engineering Quad",
-    coordinates: { latitude: 37.429913, longitude: -122.173648 },
-    category: "Academic Area",
-  },
-  {
-    name: "Gates Computer Science Building",
-    coordinates: { latitude: 37.430215, longitude: -122.173537 },
-    category: "Academic Building",
-  },
-  {
-    name: "Huang Engineering Center",
-    coordinates: { latitude: 37.428476, longitude: -122.174111 },
-    category: "Academic Building",
-  },
-  {
-    name: "Memorial Auditorium",
-    coordinates: { latitude: 37.427863, longitude: -122.166746 },
-    category: "Performance Venue",
-  },
-  {
-    name: "Old Union",
-    coordinates: { latitude: 37.424556, longitude: -122.166805 },
-    category: "Student Center",
-  },
-  {
-    name: "Frost Amphitheater",
-    coordinates: { latitude: 37.430691, longitude: -122.165925 },
-    category: "Performance Venue",
-  },
-];
 
 export interface LocationData {
   name: string;
@@ -102,11 +88,13 @@ export interface LocationData {
 }
 
 interface LocationSearchProps {
+  locations: LocationData[]; // ✅ Pass locations via props
   onSelectLocation: (location: LocationData) => void;
   initialLocation?: string;
 }
 
 export function LocationSearch({
+  locations,
   onSelectLocation,
   initialLocation = "",
 }: LocationSearchProps) {
@@ -118,7 +106,6 @@ export function LocationSearch({
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
-  // Handle search input change
   const handleSearch = (text: string) => {
     setSearchQuery(text);
 
@@ -126,9 +113,11 @@ export function LocationSearch({
       setIsSearching(true);
       setShowResults(true);
 
-      // Filter locations based on search query
-      const filteredLocations = stanfordLocations.filter((location) =>
-        location.name.toLowerCase().includes(text.toLowerCase())
+      const lowercasedQuery = text.toLowerCase();
+
+      const filteredLocations = locations.filter((location) =>
+        location.name.toLowerCase().includes(lowercasedQuery) ||
+        location.category.toLowerCase().includes(lowercasedQuery)
       );
 
       setSearchResults(filteredLocations);
@@ -139,17 +128,11 @@ export function LocationSearch({
     }
   };
 
-  // Handle location selection
   const handleSelectLocation = (location: LocationData) => {
     setSearchQuery(location.name);
     setShowResults(false);
     onSelectLocation(location);
   };
-
-  // Helper functions for VirtualizedList
-  const getItemCount = (data: LocationData[]) => data.length;
-
-  const getItem = (data: LocationData[], index: number) => data[index];
 
   return (
     <View style={styles.container}>
@@ -203,13 +186,10 @@ export function LocationSearch({
             { backgroundColor: colors.cardBackground },
           ]}
         >
-          <VirtualizedList
-            data={searchResults}
-            keyExtractor={(item: LocationData) => item.name}
-            getItemCount={getItemCount}
-            getItem={getItem}
-            renderItem={({ item }: { item: LocationData }) => (
+          <ScrollView style={styles.resultsList}>
+            {searchResults.map((item) => (
               <TouchableOpacity
+                key={item.name}
                 style={styles.resultItem}
                 onPress={() => handleSelectLocation(item)}
               >
@@ -226,15 +206,10 @@ export function LocationSearch({
                     {item.category}
                   </Text>
                 </View>
-                <Ionicons
-                  name="chevron-forward"
-                  size={16}
-                  color={colors.icon}
-                />
+                <Ionicons name="chevron-forward" size={16} color={colors.icon} />
               </TouchableOpacity>
-            )}
-            style={styles.resultsList}
-          />
+            ))}
+          </ScrollView>
         </View>
       )}
 
@@ -273,6 +248,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     height: 50,
     position: "relative",
+    zIndex: 1,
   },
   searchIcon: {
     position: "absolute",
@@ -303,6 +279,8 @@ const styles = StyleSheet.create({
     maxHeight: 200,
     borderWidth: 1,
     borderColor: "#E5E5E5",
+    zIndex: 999,
+    elevation: 10,
   },
   resultsList: {
     flex: 1,
@@ -320,3 +298,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+*/}
