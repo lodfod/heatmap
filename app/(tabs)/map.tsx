@@ -15,8 +15,9 @@ import MapView, { PROVIDER_GOOGLE, Region } from "react-native-maps";
 import { MapMarker } from "../../components/MapMarker";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
-import { EventMapCluster, mapClusters, musicGenres } from "../../data/events";
+import { musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
+import { fetchEvents } from "../../lib/supabase";
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -26,6 +27,25 @@ const initialRegion = {
   longitudeDelta: 0.0121,
 };
 
+interface Event {
+  id: string;
+  title: string;
+  latitude: number;
+  longitude: number;
+  genre?: string;
+  attendee_count: number;
+}
+
+interface EventMapCluster {
+  id: string;
+  coordinate: {
+    latitude: number;
+    longitude: number;
+  };
+  count: number;
+  isHot: boolean;
+}
+
 export default function MapScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
@@ -33,13 +53,50 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   // State for map data
-  const [clusters, setClusters] = useState<EventMapCluster[]>(mapClusters);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [clusters, setClusters] = useState<EventMapCluster[]>([]);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
-  const [locationPermission, setLocationPermission] = useState<boolean | null>(
-    null
-  );
+  const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Fetch events from Supabase
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const data = await fetchEvents(selectedFilter !== "all" ? selectedFilter : undefined);
+        setEvents(data || []);
+        
+        // Transform events into clusters
+        const eventClusters = data?.reduce((acc: { [key: string]: EventMapCluster }, event) => {
+          const key = `${event.latitude},${event.longitude}`;
+          if (!acc[key]) {
+            acc[key] = {
+              id: key,
+              coordinate: {
+                latitude: event.latitude,
+                longitude: event.longitude,
+              },
+              count: 0,
+              isHot: false,
+            };
+          }
+          acc[key].count += 1;
+          // Consider a cluster "hot" if it has more than 3 events
+          acc[key].isHot = acc[key].count > 3;
+          return acc;
+        }, {}) || {};
+
+        setClusters(Object.values(eventClusters));
+      } catch (error) {
+        console.error("Error loading events:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEvents();
+  }, [selectedFilter]);
 
   // Request location permission and get current location
   useEffect(() => {
@@ -67,25 +124,26 @@ export default function MapScreen() {
 
   // Handle cluster press
   const handleClusterPress = (cluster: EventMapCluster) => {
-    router.push(`/cluster/${cluster.id}`);
+    // Find all events in this cluster
+    const clusterEvents = events.filter(
+      event => 
+        event.latitude === cluster.coordinate.latitude && 
+        event.longitude === cluster.coordinate.longitude
+    );
+    
+    // Navigate to cluster details with the events
+    router.push({
+      pathname: "/cluster/[id]",
+      params: { 
+        id: cluster.id,
+        events: JSON.stringify(clusterEvents)
+      }
+    });
   };
 
   // Handle filter selection
   const handleFilterPress = (filterId: string) => {
     setSelectedFilter(filterId);
-
-    // In a real app, this would filter the events based on the selected filter
-    if (filterId === "all") {
-      setClusters(mapClusters);
-    } else {
-      // Simulate filtered data by slightly modifying heat status but keeping counts accurate
-      const filteredClusters = mapClusters.map((cluster) => ({
-        ...cluster,
-        isHot: Math.random() > 0.5, // Randomize the heat status only
-      }));
-
-      setClusters(filteredClusters);
-    }
   };
 
   // Go to user location
