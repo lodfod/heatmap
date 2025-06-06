@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -12,7 +13,7 @@ import {
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
-import { eventClusters } from "../../data/events";
+import { EventCluster, getEventClusters } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
 
 export default function ClusterDetailScreen() {
@@ -22,8 +23,27 @@ export default function ClusterDetailScreen() {
   const router = useRouter();
 
   // State for cluster data
-  const [cluster, setCluster] = useState(eventClusters[id as string]);
+  const [cluster, setCluster] = useState<EventCluster | null>(null);
+  const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"date" | "popularity">("date");
+
+  // Load cluster data from database
+  useEffect(() => {
+    const loadCluster = async () => {
+      try {
+        const eventClusters = await getEventClusters();
+        const foundCluster = eventClusters[id as string];
+        setCluster(foundCluster || null);
+      } catch (error) {
+        console.error("Error loading cluster:", error);
+        setCluster(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCluster();
+  }, [id]);
 
   // Get events the user is attending
   const attendingEvents =
@@ -61,7 +81,25 @@ export default function ClusterDetailScreen() {
     return a.date.localeCompare(b.date);
   });
 
-  // If cluster not found
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <Text
+            style={[
+              Typography.bodyMedium,
+              { color: colors.text, marginTop: 16 },
+            ]}
+          >
+            Loading cluster...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   if (!cluster) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>

@@ -17,7 +17,7 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { musicGenres } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-import { fetchEvents } from "../../lib/supabase";
+import { Event, fetchEventsWithLocation } from "../../lib/supabase";
 
 // Initial map region (Stanford University)
 const initialRegion = {
@@ -27,6 +27,101 @@ const initialRegion = {
   longitudeDelta: 0.0121,
 };
 
+// Interface for clustered events
+interface EventCluster {
+  id: string;
+  events: Event[];
+  centerLatitude: number;
+  centerLongitude: number;
+  isHot: boolean;
+}
+
+// Function to calculate distance between two coordinates (Haversine formula)
+function getDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lon2 - lon1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Function to cluster nearby events
+function clusterEvents(
+  events: Event[],
+  clusterRadius: number = 100
+): EventCluster[] {
+  const clusters: EventCluster[] = [];
+  const processedEvents = new Set<string>();
+
+  events.forEach((event) => {
+    if (processedEvents.has(event.id)) return;
+
+    const cluster: EventCluster = {
+      id: `cluster_${event.id}`,
+      events: [event],
+      centerLatitude: event.latitude,
+      centerLongitude: event.longitude,
+      isHot: event.is_hot,
+    };
+
+    // Find nearby events to cluster together
+    events.forEach((otherEvent) => {
+      if (otherEvent.id !== event.id && !processedEvents.has(otherEvent.id)) {
+        const distance = getDistance(
+          event.latitude,
+          event.longitude,
+          otherEvent.latitude,
+          otherEvent.longitude
+        );
+
+        if (distance <= clusterRadius) {
+          cluster.events.push(otherEvent);
+          processedEvents.add(otherEvent.id);
+        }
+      }
+    });
+
+    // Calculate cluster center (average of all event coordinates)
+    if (cluster.events.length > 1) {
+      const totalLat = cluster.events.reduce((sum, e) => sum + e.latitude, 0);
+      const totalLng = cluster.events.reduce((sum, e) => sum + e.longitude, 0);
+      cluster.centerLatitude = totalLat / cluster.events.length;
+      cluster.centerLongitude = totalLng / cluster.events.length;
+    }
+
+    // Mark as hot if any event in cluster is hot or if cluster has many events
+    cluster.isHot =
+      cluster.events.some((e) => e.is_hot) || cluster.events.length >= 3;
+
+    clusters.push(cluster);
+    processedEvents.add(event.id);
+  });
+
+  console.log("🔗 Event clustering complete:", {
+    originalEvents: events.length,
+    clusters: clusters.length,
+    clusterSummary: clusters.map((c) => ({
+      id: c.id,
+      eventCount: c.events.length,
+      isHot: c.isHot,
+      center: { lat: c.centerLatitude, lng: c.centerLongitude },
+    })),
+  });
+
+  return clusters;
+}
+
 export default function MapScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
@@ -34,7 +129,8 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
 
   // State for map data
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [eventClusters, setEventClusters] = useState<EventCluster[]>([]);
   const [region, setRegion] = useState<Region>(initialRegion);
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [locationPermission, setLocationPermission] = useState<boolean | null>(
@@ -45,12 +141,19 @@ export default function MapScreen() {
   // Request location permission and get current location
   useEffect(() => {
     (async () => {
+      console.log("🗺️ MapScreen: Starting initialization...");
+
       const { status } = await Location.requestForegroundPermissionsAsync();
       setLocationPermission(status === "granted");
 
       if (status === "granted") {
         try {
           const location = await Location.getCurrentPositionAsync({});
+          console.log("📍 User location found:", {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+          });
+
           setRegion({
             latitude: location.coords.latitude,
             longitude: location.coords.longitude,
@@ -58,24 +161,85 @@ export default function MapScreen() {
             longitudeDelta: 0.0121,
           });
         } catch (error) {
-          console.log("Error getting location:", error);
+          console.log("❌ Error getting location:", error);
         }
       }
 
       // Fetch events from Supabase
       try {
-        const fetchedEvents = await fetchEvents(selectedFilter);
-        setEvents(fetchedEvents || []);
+        console.log(
+          "🔍 Fetching events with location data for filter:",
+          selectedFilter
+        );
+
+        const fetchedEvents = await fetchEventsWithLocation(
+          selectedFilter === "all" ? undefined : selectedFilter
+        );
+
+        console.log("✅ Raw events fetched from database:", {
+          count: fetchedEvents?.length || 0,
+          events:
+            fetchedEvents?.map((event) => ({
+              id: event.id,
+              title: event.title,
+              latitude: event.latitude,
+              longitude: event.longitude,
+              genre: event.genre,
+              is_hot: event.is_hot,
+              event_count: event.event_count,
+            })) || [],
+        });
+
+        // Validate events have required location data
+        const validEvents = (fetchedEvents || []).filter((event) => {
+          const hasValidCoords =
+            event.latitude != null &&
+            event.longitude != null &&
+            !isNaN(event.latitude) &&
+            !isNaN(event.longitude);
+
+          if (!hasValidCoords) {
+            console.log("⚠️ Event missing valid coordinates:", {
+              id: event.id,
+              title: event.title,
+              latitude: event.latitude,
+              longitude: event.longitude,
+            });
+          }
+
+          return hasValidCoords;
+        });
+
+        console.log("✅ Valid events with coordinates:", {
+          validCount: validEvents.length,
+          totalCount: fetchedEvents?.length || 0,
+          validEvents: validEvents.map((event) => ({
+            id: event.id,
+            title: event.title,
+            coordinates: { lat: event.latitude, lng: event.longitude },
+            genre: event.genre,
+          })),
+        });
+
+        setEvents(validEvents);
+
+        // Create clusters for heatmap visualization
+        const clusters = clusterEvents(validEvents, 100); // 100 meter clustering radius
+        setEventClusters(clusters);
       } catch (error) {
+        console.error("❌ Error fetching events:", error);
         setEvents([]);
+        setEventClusters([]);
       }
 
       setLoading(false);
+      console.log("🏁 MapScreen initialization complete");
     })();
   }, [selectedFilter]);
 
   // Handle filter selection
   const handleFilterPress = (filterId: string) => {
+    console.log("🎛️ Filter changed from", selectedFilter, "to", filterId);
     setSelectedFilter(filterId);
   };
 
@@ -98,6 +262,40 @@ export default function MapScreen() {
         }
       } catch (error) {
         console.log("Error getting location:", error);
+      }
+    }
+  };
+
+  // Handle cluster marker press
+  const handleClusterPress = (cluster: EventCluster) => {
+    if (cluster.events.length === 1) {
+      // Single event - go to event detail
+      console.log(
+        "📍 Single event marker tapped:",
+        cluster.events[0].id,
+        cluster.events[0].title
+      );
+      router.push(`/event/${cluster.events[0].id}`);
+    } else {
+      // Multiple events - zoom into cluster or show list
+      console.log(
+        "📍 Cluster marker tapped:",
+        cluster.id,
+        "with",
+        cluster.events.length,
+        "events"
+      );
+
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: cluster.centerLatitude,
+            longitude: cluster.centerLongitude,
+            latitudeDelta: 0.005, // Zoom in closer
+            longitudeDelta: 0.005,
+          },
+          1000
+        );
       }
     }
   };
@@ -128,6 +326,11 @@ export default function MapScreen() {
       <View style={styles.header}>
         <Text style={[Typography.headingMedium, { color: colors.text }]}>
           Event Map
+        </Text>
+        <Text
+          style={[Typography.caption, { color: colors.icon, marginTop: 4 }]}
+        >
+          {events.length} events in {eventClusters.length} clusters
         </Text>
       </View>
 
@@ -180,21 +383,26 @@ export default function MapScreen() {
         showsScale={true}
         onRegionChangeComplete={setRegion}
       >
-        {/* Event Markers from Supabase */}
-        {events.map((event) =>
-          event.latitude && event.longitude ? (
+        {/* Clustered Event Markers */}
+        {eventClusters.map((cluster) => {
+          // Use the first event as representative for marker display
+          const representativeEvent: Event = {
+            ...cluster.events[0],
+            latitude: cluster.centerLatitude,
+            longitude: cluster.centerLongitude,
+            is_hot: cluster.isHot,
+          };
+
+          return (
             <MapMarker
-              key={event.id}
-              cluster={{
-                id: event.id,
-                coordinate: { latitude: event.latitude, longitude: event.longitude },
-                count: 1,
-                isHot: false,
-              }}
-              onPress={() => router.push(`/event/${event.id}`)}
+              key={cluster.id}
+              event={representativeEvent}
+              clustered={cluster.events.length > 1}
+              clusterCount={cluster.events.length}
+              onPress={() => handleClusterPress(cluster)}
             />
-          ) : null
-        )}
+          );
+        })}
       </MapView>
 
       {/* Current Location Button */}

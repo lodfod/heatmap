@@ -39,7 +39,6 @@ export default function CreateEventScreen() {
       img_path:
         coverImage ||
         "https://images.unsplash.com/photo-1492684223066-81342ee5ff30", // Default image if none selected
-      
     };
 
     try {
@@ -48,10 +47,8 @@ export default function CreateEventScreen() {
 
       //adding the event to the table
       const { data, error } = await supabase
-        .from('Events')
-        .insert([
-          newEventData,
-        ]);
+        .from("events")
+        .insert([newEventData]);
 
       // Show success message
       Alert.alert(

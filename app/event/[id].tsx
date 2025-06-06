@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   ScrollView,
   Share,
@@ -17,8 +18,9 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { getEventById } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
+import { Event } from "../../lib/supabase";
 
-// Define types for our event data
+// Define types for our event data - keeping these for the UI components
 interface EventAttendee {
   id: string;
   name: string;
@@ -32,17 +34,14 @@ interface EventComment {
   timestamp: string;
 }
 
-interface EventDetails {
-  id: string;
-  title: string;
-  date: string;
-  location: string;
-  imageUrl: string;
-  description: string;
-  organizer: string;
-  attendees: EventAttendee[];
-  photos: string[];
-  comments: EventComment[];
+// Enhanced event details that includes database data + UI-specific data
+interface EventDetails extends Event {
+  organizer?: string;
+  attendees?: EventAttendee[];
+  photos?: string[];
+  comments?: EventComment[];
+  isAttending?: boolean;
+  imageUrl?: string;
 }
 
 export default function EventDetailScreen() {
@@ -52,9 +51,41 @@ export default function EventDetailScreen() {
   const router = useRouter();
 
   // State for event data and user interactions
-  const [event, setEvent] = useState(getEventById(id as string));
-  const [isAttending, setIsAttending] = useState(event?.isAttending || false);
+  const [event, setEvent] = useState<EventDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isAttending, setIsAttending] = useState(false);
   const [showAllPhotos, setShowAllPhotos] = useState(false);
+
+  // Load event data from database
+  useEffect(() => {
+    const loadEvent = async () => {
+      try {
+        const dbEvent = await getEventById(id as string);
+        if (dbEvent) {
+          // Convert database event to UI event format with default values
+          const uiEvent: EventDetails = {
+            ...dbEvent,
+            imageUrl:
+              dbEvent.img_path ||
+              "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
+            organizer: "Event Organizer", // Default organizer since it's not in DB
+            attendees: [], // Default empty array for attendees
+            photos: [], // Default empty array for photos
+            comments: [], // Default empty array for comments
+            isAttending: false, // Default not attending
+          };
+          setEvent(uiEvent);
+          setIsAttending(uiEvent.isAttending || false);
+        }
+      } catch (error) {
+        console.error("Error loading event:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadEvent();
+  }, [id]);
 
   // Toggle attendance status
   const toggleAttendance = () => {
@@ -90,7 +121,7 @@ export default function EventDetailScreen() {
     // For this demo, we'll just add it to the local state
     setEvent({
       ...event,
-      photos: [photoUri, ...event.photos],
+      photos: [photoUri, ...(event.photos || [])],
     });
 
     // Show success message
@@ -100,6 +131,26 @@ export default function EventDetailScreen() {
       [{ text: "OK" }]
     );
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.tint} />
+          <Text
+            style={[
+              Typography.bodyMedium,
+              { color: colors.text, marginTop: 16 },
+            ]}
+          >
+            Loading event...
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   // If event not found
   if (!event) {
@@ -196,7 +247,7 @@ export default function EventDetailScreen() {
                   { color: colors.text, marginLeft: 8 },
                 ]}
               >
-                {event.date}
+                {event.date || "Date TBD"}
               </Text>
             </View>
 
@@ -212,7 +263,7 @@ export default function EventDetailScreen() {
                   { color: colors.text, marginLeft: 8 },
                 ]}
               >
-                {event.location}
+                {event.location || "Location TBD"}
               </Text>
             </View>
 
@@ -228,7 +279,7 @@ export default function EventDetailScreen() {
                   { color: colors.text, marginLeft: 8 },
                 ]}
               >
-                Organized by {event.organizer}
+                Organized by {event.organizer || "Event Organizer"}
               </Text>
             </View>
           </View>
@@ -243,14 +294,14 @@ export default function EventDetailScreen() {
                 { color: colors.text, lineHeight: 24, marginTop: 8 },
               ]}
             >
-              {event.description}
+              {event.description || "No description available."}
             </Text>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                Attendees ({event.attendees.length})
+                Attendees ({(event.attendees || []).length})
               </Text>
               <TouchableOpacity>
                 <Text style={[Typography.bodySmall, { color: colors.tint }]}>
@@ -259,30 +310,36 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.attendeesContainer}
-            >
-              {event.attendees.map((attendee) => (
-                <View key={attendee.id} style={styles.attendeeItem}>
-                  <Image
-                    source={{ uri: attendee.image }}
-                    style={styles.attendeeImage}
-                    contentFit="cover"
-                  />
-                  <Text
-                    style={[
-                      Typography.caption,
-                      { color: colors.text, marginTop: 4 },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {attendee.name.split(" ")[0]}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
+            {event.attendees && event.attendees.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.attendeesContainer}
+              >
+                {event.attendees.map((attendee) => (
+                  <View key={attendee.id} style={styles.attendeeItem}>
+                    <Image
+                      source={{ uri: attendee.image }}
+                      style={styles.attendeeImage}
+                      contentFit="cover"
+                    />
+                    <Text
+                      style={[
+                        Typography.caption,
+                        { color: colors.text, marginTop: 4 },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {attendee.name.split(" ")[0]}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={[Typography.bodyMedium, { color: colors.icon }]}>
+                No attendees yet. Be the first to attend!
+              </Text>
+            )}
           </View>
 
           {/* Photo Section - Replace with EventPhotoUploader if attending */}
@@ -291,7 +348,7 @@ export default function EventDetailScreen() {
               <EventPhotoUploader
                 eventId={event.id}
                 onPhotoAdded={handleAddPhoto}
-                existingPhotos={event.photos}
+                existingPhotos={event.photos || []}
               />
             ) : (
               <>
@@ -299,36 +356,45 @@ export default function EventDetailScreen() {
                   <Text
                     style={[Typography.headingSmall, { color: colors.text }]}
                   >
-                    Photos ({event.photos.length})
+                    Photos ({(event.photos || []).length})
                   </Text>
-                  <TouchableOpacity
-                    onPress={() => setShowAllPhotos(!showAllPhotos)}
-                  >
-                    <Text
-                      style={[Typography.bodySmall, { color: colors.tint }]}
+                  {(event.photos || []).length > 4 && (
+                    <TouchableOpacity
+                      onPress={() => setShowAllPhotos(!showAllPhotos)}
                     >
-                      {showAllPhotos ? "See Less" : "See All"}
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[Typography.bodySmall, { color: colors.tint }]}
+                      >
+                        {showAllPhotos ? "See Less" : "See All"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
-                <View style={styles.photosGrid}>
-                  {event.photos
-                    .slice(0, showAllPhotos ? event.photos.length : 4)
-                    .map((photo, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={styles.photoItem}
-                        onPress={() => console.log("Open photo view")}
-                      >
-                        <Image
-                          source={{ uri: photo }}
-                          style={styles.photo}
-                          contentFit="cover"
-                        />
-                      </TouchableOpacity>
-                    ))}
-                </View>
+                {event.photos && event.photos.length > 0 ? (
+                  <View style={styles.photosGrid}>
+                    {event.photos
+                      .slice(0, showAllPhotos ? event.photos.length : 4)
+                      .map((photo, index) => (
+                        <TouchableOpacity
+                          key={index}
+                          style={styles.photoItem}
+                          onPress={() => console.log("Open photo view")}
+                        >
+                          <Image
+                            source={{ uri: photo }}
+                            style={styles.photo}
+                            contentFit="cover"
+                          />
+                        </TouchableOpacity>
+                      ))}
+                  </View>
+                ) : (
+                  <Text style={[Typography.bodyMedium, { color: colors.icon }]}>
+                    No photos yet.
+                  </Text>
+                )}
+
                 <TouchableOpacity
                   style={[
                     styles.attendToAddPhotosButton,
@@ -350,7 +416,7 @@ export default function EventDetailScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                Comments ({event.comments.length})
+                Comments ({(event.comments || []).length})
               </Text>
               <TouchableOpacity>
                 <Text style={[Typography.bodySmall, { color: colors.tint }]}>
@@ -359,34 +425,40 @@ export default function EventDetailScreen() {
               </TouchableOpacity>
             </View>
 
-            {event.comments.map((comment) => (
-              <View key={comment.id} style={styles.commentItem}>
-                <Text
-                  style={[
-                    Typography.bodyMedium,
-                    { color: colors.text, fontWeight: "600" },
-                  ]}
-                >
-                  {comment.user}
-                </Text>
-                <Text
-                  style={[
-                    Typography.bodySmall,
-                    { color: colors.text, marginTop: 2 },
-                  ]}
-                >
-                  {comment.text}
-                </Text>
-                <Text
-                  style={[
-                    Typography.caption,
-                    { color: colors.icon, marginTop: 4 },
-                  ]}
-                >
-                  {comment.timestamp}
-                </Text>
-              </View>
-            ))}
+            {event.comments && event.comments.length > 0 ? (
+              event.comments.map((comment) => (
+                <View key={comment.id} style={styles.commentItem}>
+                  <Text
+                    style={[
+                      Typography.bodyMedium,
+                      { color: colors.text, fontWeight: "600" },
+                    ]}
+                  >
+                    {comment.user}
+                  </Text>
+                  <Text
+                    style={[
+                      Typography.bodySmall,
+                      { color: colors.text, marginTop: 2 },
+                    ]}
+                  >
+                    {comment.text}
+                  </Text>
+                  <Text
+                    style={[
+                      Typography.caption,
+                      { color: colors.icon, marginTop: 4 },
+                    ]}
+                  >
+                    {comment.timestamp}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[Typography.bodyMedium, { color: colors.icon }]}>
+                No comments yet. Be the first to comment!
+              </Text>
+            )}
           </View>
         </View>
       </ScrollView>
