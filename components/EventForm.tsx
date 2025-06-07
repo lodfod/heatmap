@@ -82,24 +82,46 @@ export function EventForm({
     field: keyof EventFormData,
     value: string | boolean | object
   ) => {
-    setFormData({
-      ...formData,
+    console.log(`📝 Form field changed: ${field}`, value);
+    setFormData((prevData) => ({
+      ...prevData,
       [field]: value,
-    });
+    }));
 
     // Clear error when field is edited
     if (errors[field]) {
-      setErrors({
-        ...errors,
+      setErrors((prevErrors) => ({
+        ...prevErrors,
         [field]: undefined,
-      });
+      }));
     }
   };
 
-  // Handle location selection
+  // Handle location selection - updated to use single state update
   const handleLocationSelect = (location: LocationData) => {
-    handleChange("location", location.name);
-    handleChange("coordinates", location.coordinates);
+    console.log("📍 Location selected in EventForm:", location);
+    console.log("📍 Location name:", location.name);
+    console.log("📍 Location coordinates:", location.coordinates);
+
+    // Update both location and coordinates in a single state update
+    setFormData((prevData) => ({
+      ...prevData,
+      location: location.name,
+      coordinates: location.coordinates,
+    }));
+
+    // Clear location error if it exists
+    if (errors.location) {
+      setErrors((prevErrors) => ({
+        ...prevErrors,
+        location: undefined,
+      }));
+    }
+
+    // Log the updated form data after state update
+    setTimeout(() => {
+      console.log("📋 Form data after location update should be updated now");
+    }, 100);
   };
 
   // Toggle public/private setting
@@ -114,6 +136,25 @@ export function EventForm({
 
   // Validate form before submission
   const validateForm = (): boolean => {
+    console.log("🔍 Validating form with data:", formData);
+    console.log("🔍 Location validation - value:", `"${formData.location}"`);
+    console.log(
+      "🔍 Location validation - trimmed:",
+      `"${formData.location.trim()}"`
+    );
+    console.log(
+      "🔍 Location validation - length:",
+      formData.location.trim().length
+    );
+    console.log("🔍 Coordinates validation:", formData.coordinates);
+    console.log("🔍 Coordinates latitude:", formData.coordinates.latitude);
+    console.log("🔍 Coordinates longitude:", formData.coordinates.longitude);
+    console.log(
+      "🔍 Are coordinates default values?",
+      formData.coordinates.latitude === 37.427619 &&
+        formData.coordinates.longitude === -122.170732
+    );
+
     const newErrors: Partial<Record<keyof EventFormData, string>> = {};
 
     if (!formData.title.trim()) {
@@ -122,6 +163,9 @@ export function EventForm({
 
     if (!formData.location.trim()) {
       newErrors.location = "Location is required";
+      console.log("❌ Location validation failed - location is empty");
+    } else {
+      console.log("✅ Location validation passed");
     }
 
     if (!formData.date.trim()) {
@@ -131,6 +175,9 @@ export function EventForm({
     if (!formData.time.trim()) {
       newErrors.time = "Time is required";
     }
+
+    console.log("🔍 Validation errors:", newErrors);
+    console.log("🔍 Form is valid:", Object.keys(newErrors).length === 0);
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

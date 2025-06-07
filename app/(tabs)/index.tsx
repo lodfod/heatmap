@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
@@ -15,26 +15,45 @@ export default function HomeScreen() {
 
   // State for events data
   const [events, setEvents] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
 
+  // Load events function (extracted for reuse)
+  const loadEvents = async () => {
+    try {
+      const allEvents = await getAllEvents();
+      console.log("📱 Home: Loaded events:", allEvents.length);
+
+      // Debug log for first few events to check image URLs
+      allEvents.slice(0, 3).forEach((event, index) => {
+        console.log(`📷 Event ${index + 1} image URL:`, event.imageUrl);
+      });
+
+      setEvents(allEvents);
+    } catch (error) {
+      console.error("❌ Home: Error loading events:", error);
+      setEvents([]);
+    }
+  };
+
+  // Initial load
   useEffect(() => {
-    const loadEvents = async () => {
-      try {
-        const allEvents = await getAllEvents();
-        console.log("📱 Home: Loaded events:", allEvents.length);
-
-        // Debug log for first few events to check image URLs
-        allEvents.slice(0, 3).forEach((event, index) => {
-          console.log(`📷 Event ${index + 1} image URL:`, event.imageUrl);
-        });
-
-        setEvents(allEvents);
-      } catch (error) {
-        console.error("❌ Home: Error loading events:", error);
-        setEvents([]);
-      }
-    };
     loadEvents();
   }, []);
+
+  // Handle pull to refresh
+  const onRefresh = async () => {
+    console.log("🔄 Refreshing events...");
+    setRefreshing(true);
+
+    try {
+      await loadEvents();
+      console.log("✅ Events refreshed successfully");
+    } catch (error) {
+      console.error("❌ Error refreshing events:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Handle RSVP action
   const handleRSVP = (id: string) => {
@@ -85,6 +104,17 @@ export default function HomeScreen() {
         )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.tint} // Color of the refresh indicator
+            title="Pull to refresh events" // iOS only
+            titleColor={colors.text} // iOS only
+            colors={[colors.tint]} // Android only - array of colors
+            progressBackgroundColor={colors.cardBackground} // Android only
+          />
+        }
       />
     </View>
   );

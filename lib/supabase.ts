@@ -12,24 +12,24 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Updated type definition for event with all required fields
+// Updated type definition for event with all required fields matching DB schema
 export interface Event {
   id: string;
-  title: string;
+  created_at?: string;
+  title?: string;
+  date?: string; // This should be a timestamp with time zone
+  location?: string;
   description?: string;
+  created_by?: string; // This is a UUID in the database
   genre?: string;
-  latitude: number;
-  longitude: number;
+  event_visibility?: string;
+  latitude?: number; // double precision
+  longitude?: number; // double precision
+  imageUrl?: string;
+
+  // Legacy fields for backward compatibility
   event_count?: number;
   is_hot?: boolean;
-  created_at?: string;
-
-  // Additional fields that might be in the database
-  date?: string;
-  location?: string;
-  imageUrl?: string;
-  created_by?: string;
-  event_visibility?: boolean;
 }
 
 // Helper function to fetch events with optional genre filter

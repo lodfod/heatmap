@@ -31,62 +31,111 @@ export function ImagePickerComponent({
 
   // Request permission and pick an image
   const pickImage = async () => {
+    console.log("📸 Pick image button pressed");
     setLoading(true);
 
-    // Request permission
-    const permissionResult =
-      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    try {
+      // Request permission
+      const permissionResult =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+      console.log("📸 Permission result:", permissionResult);
 
-    if (permissionResult.granted === false) {
+      if (permissionResult.granted === false) {
+        console.log("❌ Media library permission denied");
+        setLoading(false);
+        return;
+      }
+
+      // Launch image library
+      console.log("📸 Launching image library...");
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+        allowsMultipleSelection: false,
+      });
+
+      console.log("📸 Image picker result:", result);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📸 Selected image asset:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
+        });
+
+        console.log("📸 Setting image state and calling onImageSelected...");
+        setImage(asset.uri);
+        onImageSelected(asset.uri);
+        console.log("📸 Image selection complete");
+      } else {
+        console.log("📸 Image selection was cancelled or failed");
+      }
+    } catch (error) {
+      console.error("❌ Error picking image:", error);
+    } finally {
       setLoading(false);
-      return;
-    }
-
-    // Launch image library
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.7,
-    });
-
-    setLoading(false);
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
-      onImageSelected(result.assets[0].uri);
     }
   };
 
   // Take a photo with the camera
   const takePhoto = async () => {
+    console.log("📸 Take photo button pressed");
     setLoading(true);
 
-    // Request permission
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    try {
+      // Request permission
+      const permissionResult =
+        await ImagePicker.requestCameraPermissionsAsync();
+      console.log("📸 Camera permission result:", permissionResult);
 
-    if (permissionResult.granted === false) {
+      if (permissionResult.granted === false) {
+        console.log("❌ Camera permission denied");
+        setLoading(false);
+        return;
+      }
+
+      // Launch camera
+      console.log("📸 Launching camera...");
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.8,
+      });
+
+      console.log("📸 Camera result:", result);
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        console.log("📸 Captured photo asset:", {
+          uri: asset.uri,
+          width: asset.width,
+          height: asset.height,
+          fileSize: asset.fileSize,
+          mimeType: asset.mimeType,
+        });
+
+        console.log("📸 Setting image state and calling onImageSelected...");
+        setImage(asset.uri);
+        onImageSelected(asset.uri);
+        console.log("📸 Photo capture complete");
+      } else {
+        console.log("📸 Photo capture was cancelled or failed");
+      }
+    } catch (error) {
+      console.error("❌ Error taking photo:", error);
+    } finally {
       setLoading(false);
-      return;
-    }
-
-    // Launch camera
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.7,
-    });
-
-    setLoading(false);
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setImage(result.assets[0].uri);
-      onImageSelected(result.assets[0].uri);
     }
   };
 
   // Remove the selected image
   const removeImage = () => {
+    console.log("📸 Removing image");
     setImage(null);
     onImageSelected("");
   };

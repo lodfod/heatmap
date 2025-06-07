@@ -487,7 +487,14 @@ export async function getFilteredEvents(filter: string) {
 
 // Simplified function for all events (UI format)
 export async function getAllEvents() {
-  return getFilteredEvents("all");
+  const events = await fetchEvents();
+  console.log("📱 Fetched events from database:");
+  events.forEach((event, index) => {
+    console.log(
+      `📷 Event ${index + 1}: "${event.title}" - Image: ${event.imageUrl}`
+    );
+  });
+  return events;
 }
 
 // Helper function to get event by id (now from database)
@@ -522,18 +529,21 @@ export function generateEventId(): string {
 
 // Interface for new event data
 export interface NewEventData {
-  time: any;
-  coordinates: any;
   title: string;
   date: string;
+  time: string;
   location: string;
   description: string;
-  created_by: string;
-  genre?: string;
-  event_visibility?: boolean;
+  created_by: string; // Should be UUID
+  genre: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
   latitude: number;
   longitude: number;
   imageUrl: string;
+  event_visibility: string; // Add this field
 }
 
 // Updated addNewEvent function to work entirely with database
