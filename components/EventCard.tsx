@@ -11,13 +11,7 @@ import {
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React from "react";
-import {
-  GestureResponderEvent,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Colors } from "../constants/Colors";
 import { Typography } from "../constants/Typography";
 import { useColorScheme } from "../hooks/useColorScheme";
@@ -103,7 +97,6 @@ export function EventCard({
   location,
   imageUrl,
   attendees,
-  onRSVP,
 }: EventCardProps) {
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -119,14 +112,6 @@ export function EventCard({
   // Navigate to the event details page
   const handlePress = () => {
     router.push(`/event/${id}`);
-  };
-
-  // Handle the RSVP button press
-  const handleRSVP = (e: GestureResponderEvent) => {
-    e.stopPropagation();
-    if (onRSVP) {
-      onRSVP(id);
-    }
   };
 
   return (
@@ -174,16 +159,6 @@ export function EventCard({
           </Text>
         ) : null}
       </View>
-
-      {/* RSVP Button */}
-      {onRSVP && (
-        <TouchableOpacity
-          style={[styles.rsvpButton, { backgroundColor: colors.tint }]}
-          onPress={handleRSVP}
-        >
-          <Text style={[Typography.buttonSmall, { color: "#FFF" }]}>RSVP</Text>
-        </TouchableOpacity>
-      )}
     </TouchableOpacity>
   );
 }
@@ -206,14 +181,5 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-  },
-  rsvpButton: {
-    position: "absolute",
-    bottom: 16,
-    right: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    elevation: 2,
   },
 });

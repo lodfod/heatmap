@@ -1,11 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
+import {
+  format,
+  isThisWeek,
+  isThisYear,
+  isToday,
+  isTomorrow,
+  isValid,
+  parse,
+  parseISO,
+} from "date-fns";
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  RefreshControl,
   ScrollView,
   Share,
   StyleSheet,
@@ -18,13 +29,20 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { getEventById } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
-import { Event } from "../../lib/supabase";
+import { Event, supabase } from "../../lib/supabase";
 
+interface EventPhoto {
+  id: string;
+  photo_url: string;
+  caption?: string;
+  uploaded_by: string;
+  created_at: string;
+}
 // Define types for our event data - keeping these for the UI components
 interface EventAttendee {
   id: string;
   name: string;
-  image: string;
+  imageUrl?: string;
 }
 
 interface EventComment {
@@ -44,6 +62,263 @@ interface EventDetails extends Event {
   imageUrl?: string;
 }
 
+// RSVP functions
+const getRSVPStatus = async (
+  eventId: string,
+  userId: string
+): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from("rsvp_list")
+      .select("coming")
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .single();
+
+    if (error) {
+      // If no record found, user is not attending
+      if (error.code === "PGRST116") {
+        return false;
+      }
+      throw error;
+    }
+
+    return data.coming || false;
+  } catch (error) {
+    console.error("Error getting RSVP status:", error);
+    return false;
+  }
+};
+
+const updateRSVPStatus = async (
+  eventId: string,
+  userId: string,
+  isAttending: boolean
+): Promise<void> => {
+  try {
+    // First, try to update existing record
+    const { data: updateData, error: updateError } = await supabase
+      .from("rsvp_list")
+      .update({ coming: isAttending })
+      .eq("event_id", eventId)
+      .eq("user_id", userId)
+      .select();
+
+    // If no rows were updated, create a new record
+    if (updateData && updateData.length === 0) {
+      const { error: insertError } = await supabase.from("rsvp_list").insert([
+        {
+          event_id: eventId,
+          user_id: userId,
+          coming: isAttending,
+        },
+      ]);
+
+      if (insertError) {
+        throw insertError;
+      }
+    } else if (updateError) {
+      throw updateError;
+    }
+
+    console.log(
+      `✅ RSVP updated: ${isAttending ? "attending" : "not attending"}`
+    );
+  } catch (error) {
+    console.error("Error updating RSVP status:", error);
+    throw error;
+  }
+};
+
+// Function to fetch event attendees with profile info (NO FOREIGN KEY REQUIRED)
+const fetchEventAttendees = async (
+  eventId: string
+): Promise<EventAttendee[]> => {
+  try {
+    console.log("🔍 Fetching attendees for event:", eventId);
+
+    // Step 1: Get the user IDs of people attending this event
+    const { data: rsvpData, error: rsvpError } = await supabase
+      .from("rsvp_list")
+      .select("user_id")
+      .eq("event_id", eventId)
+      .eq("coming", true);
+
+    if (rsvpError) {
+      console.error("Error fetching RSVPs:", rsvpError);
+      return [];
+    }
+
+    if (!rsvpData || rsvpData.length === 0) {
+      console.log("📭 No attendees found for event");
+      return [];
+    }
+
+    console.log(`👥 Found ${rsvpData.length} attendees, fetching profiles...`);
+
+    // Step 2: Extract user IDs into an array
+    const userIds = rsvpData.map((rsvp) => rsvp.user_id);
+
+    // Step 3: Get profile information for those users (separate query)
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, name, imageUrl")
+      .in("id", userIds);
+
+    if (profilesError) {
+      console.error("Error fetching profiles:", profilesError);
+      // Continue anyway - we'll use default data for users without profiles
+    }
+
+    console.log(
+      `✅ Successfully fetched ${profilesData?.length || 0} profiles`
+    );
+
+    // Step 4: Combine the data - create attendee objects for each user
+    const attendees = userIds.map((userId) => {
+      const profile = profilesData?.find((p) => p.id === userId);
+      return {
+        id: userId,
+        name: profile?.name || "User", // Default name if no profile
+        imageUrl: profile?.imageUrl, // Will be undefined if no profile/image
+      };
+    });
+
+    console.log(`🎉 Returning ${attendees.length} attendees`);
+    return attendees;
+  } catch (error) {
+    console.error("❌ Error in fetchEventAttendees:", error);
+    return [];
+  }
+};
+
+// Enhanced helper function to format dates with better error handling
+const formatEventDate = (dateString: string): string => {
+  // Handle null, undefined, or empty strings
+  if (!dateString || dateString.trim() === "" || dateString === "Date TBD") {
+    return "Date TBD";
+  }
+
+  try {
+    let date: Date;
+
+    console.log("📅 Formatting event detail date string:", dateString);
+
+    // Try parsing as ISO string first (most common from Supabase)
+    date = parseISO(dateString);
+
+    // If parseISO fails, try other common formats
+    if (!isValid(date)) {
+      // Try parsing as JavaScript Date string
+      date = new Date(dateString);
+    }
+
+    // If still invalid, try parsing common date formats
+    if (!isValid(date)) {
+      // Try MM/DD/YYYY format
+      const mmddyyyy = parse(dateString, "MM/dd/yyyy", new Date());
+      if (isValid(mmddyyyy)) {
+        date = mmddyyyy;
+      } else {
+        // Try YYYY-MM-DD format
+        const yyyymmdd = parse(dateString, "yyyy-MM-dd", new Date());
+        if (isValid(yyyymmdd)) {
+          date = yyyymmdd;
+        }
+      }
+    }
+
+    // Final validation
+    if (!isValid(date)) {
+      console.warn("❌ Could not parse event detail date:", dateString);
+      return dateString; // Return original string as fallback
+    }
+
+    console.log("✅ Successfully parsed event detail date:", date);
+
+    // Format based on how close the date is
+    if (isToday(date)) {
+      return `Today at ${format(date, "h:mm a")}`;
+    } else if (isTomorrow(date)) {
+      return `Tomorrow at ${format(date, "h:mm a")}`;
+    } else if (isThisWeek(date)) {
+      return format(date, "EEEE, MMMM d 'at' h:mm a"); // "Monday, December 25 at 7:30 PM"
+    } else if (isThisYear(date)) {
+      return format(date, "MMMM d 'at' h:mm a"); // "December 25 at 7:30 PM"
+    } else {
+      return format(date, "MMMM d, yyyy 'at' h:mm a"); // "December 25, 2024 at 7:30 PM"
+    }
+  } catch (error) {
+    console.error("❌ Error formatting event detail date:", error);
+    console.error("❌ Original event detail date string:", dateString);
+    return dateString; // Fallback to original string
+  }
+};
+
+// Component for displaying attendee profile picture
+const AttendeeAvatar = ({
+  attendee,
+  size = 40,
+  colors,
+}: {
+  attendee: EventAttendee;
+  size?: number;
+  colors: any;
+}) => {
+  if (attendee.imageUrl) {
+    return (
+      <Image
+        source={{ uri: attendee.imageUrl }}
+        style={[
+          styles.attendeeAvatar,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+          },
+        ]}
+        contentFit="cover"
+      />
+    );
+  } else {
+    // Show colored circle with initials if no image
+    const initials = attendee.name
+      .split(" ")
+      .map((word) => word.charAt(0))
+      .join("")
+      .substring(0, 2)
+      .toUpperCase();
+
+    return (
+      <View
+        style={[
+          styles.attendeeAvatar,
+          styles.attendeeAvatarPlaceholder,
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: colors.tint,
+          },
+        ]}
+      >
+        <Text
+          style={[
+            Typography.caption,
+            {
+              color: "#FFF",
+              fontSize: size * 0.35,
+              fontWeight: "600",
+            },
+          ]}
+        >
+          {initials}
+        </Text>
+      </View>
+    );
+  }
+};
+
 export default function EventDetailScreen() {
   const { id } = useLocalSearchParams();
   const colorScheme = useColorScheme();
@@ -53,47 +328,132 @@ export default function EventDetailScreen() {
   // State for event data and user interactions
   const [event, setEvent] = useState<EventDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isAttending, setIsAttending] = useState(false);
-  const [showAllPhotos, setShowAllPhotos] = useState(false);
+  const [rsvpLoading, setRsvpLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [eventPhotos, setEventPhotos] = useState<string[]>([]);
+  const [photoRefreshKey, setPhotoRefreshKey] = useState(0);
+  const [attendees, setAttendees] = useState<EventAttendee[]>([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
 
-  // Load event data from database
-  useEffect(() => {
-    const loadEvent = async () => {
-      try {
-        const dbEvent = await getEventById(id as string);
-        if (dbEvent) {
-          // Convert database event to UI event format with default values
-          const uiEvent: EventDetails = {
-            ...dbEvent,
-            imageUrl:
-              dbEvent.imageUrl ||
-              "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
-            organizer: "Event Organizer", // Default organizer since it's not in DB
-            attendees: [], // Default empty array for attendees
-            photos: [], // Default empty array for photos
-            comments: [], // Default empty array for comments
-            isAttending: false, // Default not attending
-          };
-          setEvent(uiEvent);
-          setIsAttending(uiEvent.isAttending || false);
-        }
-      } catch (error) {
-        console.error("Error loading event:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Function to load attendees
+  const loadAttendees = useCallback(async () => {
+    if (!id) return;
 
-    loadEvent();
+    setAttendeesLoading(true);
+    try {
+      const attendeesData = await fetchEventAttendees(id as string);
+      setAttendees(attendeesData);
+    } catch (error) {
+      console.error("Error loading attendees:", error);
+    } finally {
+      setAttendeesLoading(false);
+    }
   }, [id]);
 
-  // Toggle attendance status
-  const toggleAttendance = () => {
-    setIsAttending(!isAttending);
+  // Function to load event data and RSVP status
+  const loadEventAndRSVP = useCallback(async () => {
+    try {
+      // Get current user
+      const { data: userData, error: userError } =
+        await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        console.error("User not authenticated");
+        return;
+      }
 
-    if (!isAttending) {
-      // In a real app, this would make an API call to update attendance status
-      Alert.alert("Success", "You are now attending this event!");
+      setCurrentUserId(userData.user.id);
+
+      // Load event data
+      const dbEvent = await getEventById(id as string);
+      if (dbEvent) {
+        // Convert database event to UI event format with default values
+        const uiEvent: EventDetails = {
+          ...dbEvent,
+          imageUrl:
+            dbEvent.imageUrl ||
+            "https://images.unsplash.com/photo-1492684223066-81342ee5ff30",
+          organizer: "Event Organizer", // Default organizer since it's not in DB
+          photos: [], // Default empty array for photos
+          comments: [], // Default empty array for comments
+          isAttending: false, // Will be updated below
+        };
+        setEvent(uiEvent);
+
+        // Load RSVP status
+        const attendingStatus = await getRSVPStatus(
+          id as string,
+          userData.user.id
+        );
+        setIsAttending(attendingStatus);
+      }
+    } catch (error) {
+      console.error("Error loading event and RSVP:", error);
+    }
+  }, [id]);
+
+  // Initial load
+  useEffect(() => {
+    const initialLoad = async () => {
+      setLoading(true);
+      await Promise.all([loadEventAndRSVP(), loadAttendees()]);
+      setLoading(false);
+    };
+    initialLoad();
+  }, [loadEventAndRSVP, loadAttendees]);
+
+  // Handle pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([loadEventAndRSVP(), loadAttendees()]);
+    setPhotoRefreshKey((prev) => prev + 1); // Refresh photos as well
+    setRefreshing(false);
+  }, [loadEventAndRSVP, loadAttendees]);
+
+  // Toggle attendance status with Supabase integration
+  const toggleAttendance = async () => {
+    if (!currentUserId || !event) {
+      Alert.alert("Error", "You must be logged in to RSVP for events.");
+      return;
+    }
+
+    if (rsvpLoading) return;
+
+    setRsvpLoading(true);
+    const newAttendingStatus = !isAttending;
+
+    try {
+      // Optimistically update the UI
+      setIsAttending(newAttendingStatus);
+
+      // Update the database
+      await updateRSVPStatus(event.id, currentUserId, newAttendingStatus);
+
+      // Refresh photos and attendees when attendance status changes
+      setPhotoRefreshKey((prev) => prev + 1);
+      await loadAttendees(); // Reload attendees to reflect the change
+
+      // Show success message
+      Alert.alert(
+        "RSVP Updated",
+        newAttendingStatus
+          ? "You are now attending this event!"
+          : "You are no longer attending this event.",
+        [{ text: "OK" }]
+      );
+    } catch (error) {
+      // Revert the optimistic update on error
+      setIsAttending(!newAttendingStatus);
+
+      console.error("Error updating RSVP:", error);
+      Alert.alert(
+        "Error",
+        "There was a problem updating your RSVP. Please try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setRsvpLoading(false);
     }
   };
 
@@ -103,33 +463,19 @@ export default function EventDetailScreen() {
 
     try {
       const result = await Share.share({
-        message: `Check out this event: ${event.title} on ${event.date} at ${event.location}`,
-        url: `https://events.app/event/${event.id}`,
+        message: `Check out this event: ${event.title} on ${formatEventDate(
+          event.date || ""
+        )} at ${event.location}`,
+        url: `https://heatmapp.app/event/${event.id}`,
       });
     } catch (error) {
       console.log("Error sharing event:", error);
     }
   };
 
-  // Handle adding a new photo to the event
-  const handleAddPhoto = (photoUri: string) => {
-    if (!event) return;
-
-    // In a real app, this would upload the photo to a server
-    // and then update the event with the new photo URL
-
-    // Store photos locally for now
-    setEvent({
-      ...event,
-      photos: [photoUri, ...(event.photos || [])],
-    });
-
-    // Show success message
-    Alert.alert(
-      "Photo Added",
-      "Your photo has been added to the event gallery!",
-      [{ text: "OK" }]
-    );
+  // Handle photo refresh when new photos are added
+  const handlePhotoRefresh = () => {
+    setPhotoRefreshKey((prev) => prev + 1);
   };
 
   // Loading state
@@ -203,7 +549,17 @@ export default function EventDetailScreen() {
         }}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.tint}
+            colors={[colors.tint]}
+          />
+        }
+      >
         {/* Event Cover Image */}
         <Image
           source={{ uri: event.imageUrl }}
@@ -227,14 +583,91 @@ export default function EventDetailScreen() {
                   styles.attendButton,
                   {
                     backgroundColor: isAttending ? colors.success : colors.tint,
+                    opacity: rsvpLoading ? 0.7 : 1,
                   },
                 ]}
                 onPress={toggleAttendance}
+                disabled={rsvpLoading}
               >
-                <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
-                  {isAttending ? "Attending" : "Attend"}
-                </Text>
+                {rsvpLoading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={[Typography.buttonMedium, { color: "#FFF" }]}>
+                    {isAttending ? "Attending" : "Attend"}
+                  </Text>
+                )}
               </TouchableOpacity>
+            </View>
+
+            {/* Attendees Row */}
+            <View style={styles.attendeesSection}>
+              {attendeesLoading ? (
+                <ActivityIndicator size="small" color={colors.tint} />
+              ) : attendees.length > 0 ? (
+                <View style={styles.attendeesRow}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.attendeesScrollContainer}
+                  >
+                    {attendees.slice(0, 10).map((attendee, index) => (
+                      <View
+                        key={attendee.id}
+                        style={[
+                          styles.attendeeContainer,
+                          index > 0 && styles.attendeeOverlap,
+                        ]}
+                      >
+                        <AttendeeAvatar
+                          attendee={attendee}
+                          size={36}
+                          colors={colors}
+                        />
+                      </View>
+                    ))}
+                    {attendees.length > 10 && (
+                      <View
+                        style={[
+                          styles.attendeeContainer,
+                          styles.attendeeOverlap,
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.attendeeMoreIndicator,
+                            {
+                              backgroundColor: colors.cardBackground,
+                              borderColor: colors.border,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              Typography.caption,
+                              { color: colors.text, fontSize: 12 },
+                            ]}
+                          >
+                            +{attendees.length - 10}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </ScrollView>
+                  <Text
+                    style={[
+                      Typography.caption,
+                      { color: colors.icon, marginTop: 8 },
+                    ]}
+                  >
+                    {attendees.length}{" "}
+                    {attendees.length === 1 ? "person" : "people"} attending
+                  </Text>
+                </View>
+              ) : (
+                <Text style={[Typography.caption, { color: colors.icon }]}>
+                  No attendees yet. Be the first to attend!
+                </Text>
+              )}
             </View>
           </View>
 
@@ -251,7 +684,7 @@ export default function EventDetailScreen() {
                   { color: colors.text, marginLeft: 8 },
                 ]}
               >
-                {event.date || "Date TBD"}
+                {formatEventDate(event.date || "")}
               </Text>
             </View>
 
@@ -302,120 +735,73 @@ export default function EventDetailScreen() {
             </Text>
           </View>
 
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                Attendees ({(event.attendees || []).length})
-              </Text>
-              <TouchableOpacity>
-                <Text style={[Typography.bodySmall, { color: colors.tint }]}>
-                  See All
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {event.attendees && event.attendees.length > 0 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.attendeesContainer}
-              >
-                {event.attendees.map((attendee) => (
-                  <View key={attendee.id} style={styles.attendeeItem}>
-                    <Image
-                      source={{ uri: attendee.image }}
-                      style={styles.attendeeImage}
-                      contentFit="cover"
-                    />
-                    <Text
-                      style={[
-                        Typography.caption,
-                        { color: colors.text, marginTop: 4 },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {attendee.name.split(" ")[0]}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            ) : (
-              <Text style={[Typography.bodyMedium, { color: colors.icon }]}>
-                No attendees yet. Be the first to attend!
-              </Text>
-            )}
-          </View>
-
-          {/* Photo Section - Replace with EventPhotoUploader if attending */}
-          <View style={styles.section}>
-            {isAttending ? (
+          {/* Photo Section - Only show if attending */}
+          {isAttending ? (
+            <View style={styles.section}>
               <EventPhotoUploader
+                key={`photo-uploader-${photoRefreshKey}`}
                 eventId={event.id}
-                onPhotoAdded={handleAddPhoto}
-                existingPhotos={event.photos || []}
+                isAttending={isAttending}
+                onPhotoRefresh={handlePhotoRefresh}
               />
-            ) : (
-              <>
-                <View style={styles.sectionHeader}>
+            </View>
+          ) : (
+            <View style={styles.section}>
+              <View style={styles.nonAttendingPhotoMessage}>
+                <View style={styles.photoMessageContainer}>
+                  <Ionicons
+                    name="camera-outline"
+                    size={32}
+                    color={colors.icon}
+                    style={{ marginBottom: 12 }}
+                  />
                   <Text
-                    style={[Typography.headingSmall, { color: colors.text }]}
+                    style={[
+                      Typography.headingSmall,
+                      {
+                        color: colors.text,
+                        textAlign: "center",
+                        marginBottom: 8,
+                      },
+                    ]}
                   >
-                    Photos ({(event.photos || []).length})
+                    Event Photos
                   </Text>
-                  {(event.photos || []).length > 4 && (
-                    <TouchableOpacity
-                      onPress={() => setShowAllPhotos(!showAllPhotos)}
-                    >
+                  <Text
+                    style={[
+                      Typography.bodyMedium,
+                      {
+                        color: colors.icon,
+                        textAlign: "center",
+                        marginBottom: 16,
+                      },
+                    ]}
+                  >
+                    Photos are only visible to event attendees. Join this event
+                    to see and share photos!
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.attendToPhotosButton,
+                      { backgroundColor: colors.tint },
+                    ]}
+                    onPress={toggleAttendance}
+                    disabled={rsvpLoading}
+                  >
+                    {rsvpLoading ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
                       <Text
-                        style={[Typography.bodySmall, { color: colors.tint }]}
+                        style={[Typography.buttonMedium, { color: "#FFF" }]}
                       >
-                        {showAllPhotos ? "See Less" : "See All"}
+                        Attend Event
                       </Text>
-                    </TouchableOpacity>
-                  )}
+                    )}
+                  </TouchableOpacity>
                 </View>
-
-                {event.photos && event.photos.length > 0 ? (
-                  <View style={styles.photosGrid}>
-                    {event.photos
-                      .slice(0, showAllPhotos ? event.photos.length : 4)
-                      .map((photo, index) => (
-                        <TouchableOpacity
-                          key={index}
-                          style={styles.photoItem}
-                          onPress={() => console.log("Open photo view")}
-                        >
-                          <Image
-                            source={{ uri: photo }}
-                            style={styles.photo}
-                            contentFit="cover"
-                          />
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-                ) : (
-                  <Text style={[Typography.bodyMedium, { color: colors.icon }]}>
-                    No photos yet.
-                  </Text>
-                )}
-
-                <TouchableOpacity
-                  style={[
-                    styles.attendToAddPhotosButton,
-                    {
-                      backgroundColor: colors.background,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={toggleAttendance}
-                >
-                  <Text style={[Typography.bodyMedium, { color: colors.tint }]}>
-                    Attend this event to add photos
-                  </Text>
-                </TouchableOpacity>
-              </>
-            )}
-          </View>
+              </View>
+            </View>
+          )}
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -521,6 +907,44 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 44,
+  },
+  attendeesSection: {
+    width: "100%",
+    alignItems: "flex-start",
+    marginTop: 16,
+  },
+  attendeesRow: {
+    width: "100%",
+  },
+  attendeesScrollContainer: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
+  attendeeContainer: {
+    marginRight: 8,
+  },
+  attendeeOverlap: {
+    marginLeft: -12,
+  },
+  attendeeAvatar: {
+    borderWidth: 2,
+    borderColor: "#FFF",
+  },
+  attendeeAvatarPlaceholder: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  attendeeMoreIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    justifyContent: "center",
+    alignItems: "center",
   },
   infoContainer: {
     marginBottom: 24,
@@ -539,40 +963,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  attendeesContainer: {
-    flexDirection: "row",
-    marginTop: 10,
-  },
-  attendeeItem: {
-    alignItems: "center",
-    marginRight: 16,
-    width: 60,
-  },
-  attendeeImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-  },
-  photosGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginHorizontal: -5,
-  },
-  photoItem: {
-    width: "50%",
-    padding: 5,
-  },
-  photo: {
-    width: "100%",
-    height: 120,
-    borderRadius: 8,
-  },
-  attendToAddPhotosButton: {
-    marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
+  nonAttendingPhotoMessage: {
+    padding: 24,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.02)",
+    borderWidth: 2,
+    borderColor: "rgba(0,0,0,0.1)",
     borderStyle: "dashed",
+  },
+  photoMessageContainer: {
+    alignItems: "center",
+  },
+  attendToPhotosButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 25,
+    minWidth: 120,
     alignItems: "center",
   },
   commentItem: {
