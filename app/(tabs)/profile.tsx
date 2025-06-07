@@ -7,20 +7,21 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+
 import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { useColorScheme } from "../../hooks/useColorScheme";
 // Mock user data
-const mockUser = {
-  name: "Alex Johnson",
-  username: "alex_j",
-  profileImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
-  bio: "Stanford CS '25 | Love exploring new places and meeting new people",
+const defaultUser = {
+  name: "User",
+  profileImage: "https://images.unsplash.com/photo-1650902565793-c2eb262aefbc",
+  profile_text: "Write something fun!",
 };
 
 // Mock events data
@@ -63,32 +64,39 @@ export default function ProfileScreen() {
 
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [profileTextInput, setProfileTextInput] = useState(userProfile?.profile_text || "");
+  const [nameInput, setNameInput] = useState(userProfile?.name || "");
+
 
   useEffect(() => {
-  const fetchProfile = async () => {
-    setLoading(true);
-    
-    const { data: { user } } = await supabase.auth.getUser();
+    const fetchProfile = async () => {
+      setLoading(true);
 
-    if (user) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+      const { data: { user } } = await supabase.auth.getUser();
 
-      if (error) {
-        console.error("Error fetching profile:", error);
-      } else {
-        setUserProfile(data);
+      if (user) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (error && error.code !== "PGRST116") {
+          // Log only if it's not the "no rows" error
+          console.error("Error fetching profile:", error);
+        } else if (data) {
+          setUserProfile(data);
+        }
       }
-    }
 
-    setLoading(false);
-  };
+      setLoading(false);
+    };
 
-  fetchProfile();
-}, []);
+    fetchProfile();
+  }, []);
+
+
 
   return (
     <ScrollView
@@ -100,38 +108,133 @@ export default function ProfileScreen() {
       {/* Profile Header */}
       <View style={styles.profileHeader}>
         <Image
-          source={{ uri: mockUser.profileImage }}
+          source={{ uri: userProfile?.profileImage || defaultUser.profileImage }}
           style={styles.profileImage}
           resizeMode="cover"
         />
 
         <View style={styles.profileInfo}>
           <Text style={[Typography.headingMedium, { color: colors.text }]}>
-            {userProfile?.name ||mockUser.name}
+            {userProfile?.name || defaultUser.name}
           </Text>
 
-          <Text
-            style={[Typography.bodySmall, { color: colors.text, marginTop: 8 }]}
-          >
-            {userProfile?.profile_text || mockUser.bio}
-          </Text>
+          {isEditing ? (
+            <>
+              <TextInput
+                value={profileTextInput}
+                onChangeText={setProfileTextInput}
+                placeholder="Write something fun!"
+                multiline
+                style={{
+                  marginTop: 8,
+                  padding: 8,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  color: colors.text,
+                  minHeight: 60,
+                }}
+              />
+              <TextInput
+                value={nameInput}
+                onChangeText={setNameInput}
+                placeholder="Your name"
+                style={{
+                  marginTop: 8,
+                  padding: 8,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  color: colors.text,
+                }}
+              />
+
+              <View style={{ flexDirection: "row", marginTop: 8 }}>
+                <TouchableOpacity
+                  onPress={async () => {
+  console.log("Saving new info...");
+  
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    console.error("User not authenticated", authError);
+    return;
+  }
+
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        name: nameInput,
+        profile_text: profileTextInput,
+        
+      },
+      { onConflict: 'id' }
+    );
+
+  if (error) {
+    console.error("Error upserting profile:", error);
+  } else {
+    setUserProfile((prev: any) => ({
+      ...prev,
+      name: nameInput,
+      profile_text: profileTextInput,
+    }));
+    setIsEditing(false);
+  }
+}}
+
+
+                  style={{ marginRight: 16 }}
+                >
+                  <Text style={{ color: colors.tint }}>Save</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity onPress={() => {
+                  setIsEditing(false);
+                  setNameInput(userProfile?.name || defaultUser.name);
+                  setProfileTextInput(userProfile?.profile_text || defaultUser.profile_text);
+                }}>
+                  <Text style={{ color: colors.text }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <Text
+              style={[Typography.bodySmall, { color: colors.text, marginTop: 8 }]}
+            >
+              {userProfile?.profile_text || defaultUser.profile_text}
+            </Text>
+          )}
         </View>
       </View>
 
       {/* Edit Profile Button */}
-      <TouchableOpacity
-        style={[
-          styles.editButton,
-          {
-            backgroundColor: colors.cardBackground,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <Text style={[Typography.buttonMedium, { color: colors.text }]}>
-          Edit Profile
-        </Text>
-      </TouchableOpacity>
+      {!isEditing && (
+        <TouchableOpacity
+          onPress={() => {
+            setNameInput(userProfile?.name || defaultUser.name);
+            setProfileTextInput(userProfile?.profile_text || defaultUser.profile_text);
+            setIsEditing(true);
+          }}
+          style={[
+            styles.editButton,
+            {
+              backgroundColor: colors.cardBackground,
+              borderColor: colors.border,
+            },
+          ]}
+        >
+          <Text style={[Typography.buttonMedium, { color: colors.text }]}>
+            Edit Profile
+          </Text>
+        </TouchableOpacity>
+      )}
+
 
       {/* Events Tabs */}
       <View style={styles.tabContainer}>
