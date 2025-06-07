@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -8,6 +9,10 @@ import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { getAllEvents } from "../../data/events";
 import { useColorScheme } from "../../hooks/useColorScheme";
+
+// AsyncStorage keys
+const LIKED_EVENTS_KEY = "@liked_events";
+const REJECTED_EVENTS_KEY = "@rejected_events";
 
 export default function DiscoverScreen() {
   const colorScheme = useColorScheme();
@@ -24,70 +29,173 @@ export default function DiscoverScreen() {
   // State for view management
   const [showLikedEvents, setShowLikedEvents] = useState(false);
 
-  // Load events on component mount
+  // Load persisted swipe data from AsyncStorage
+  const loadSwipeData = async () => {
+    try {
+      console.log("📱 Loading swipe data from AsyncStorage...");
+
+      const [likedData, rejectedData] = await Promise.all([
+        AsyncStorage.getItem(LIKED_EVENTS_KEY),
+        AsyncStorage.getItem(REJECTED_EVENTS_KEY),
+      ]);
+
+      const liked = likedData ? JSON.parse(likedData) : [];
+      const rejected = rejectedData ? JSON.parse(rejectedData) : [];
+
+      console.log("✅ Loaded liked events:", liked.length);
+      console.log("✅ Loaded rejected events:", rejected.length);
+
+      setLikedEvents(liked);
+      setRejectedEvents(rejected);
+    } catch (error) {
+      console.error("❌ Error loading swipe data:", error);
+      // If there's an error, just use empty arrays
+      setLikedEvents([]);
+      setRejectedEvents([]);
+    }
+  };
+
+  // Save liked events to AsyncStorage
+  const saveLikedEvents = async (likedEventIds: string[]) => {
+    try {
+      await AsyncStorage.setItem(
+        LIKED_EVENTS_KEY,
+        JSON.stringify(likedEventIds)
+      );
+      console.log(
+        "💾 Saved liked events to AsyncStorage:",
+        likedEventIds.length
+      );
+    } catch (error) {
+      console.error("❌ Error saving liked events:", error);
+    }
+  };
+
+  // Save rejected events to AsyncStorage
+  const saveRejectedEvents = async (rejectedEventIds: string[]) => {
+    try {
+      await AsyncStorage.setItem(
+        REJECTED_EVENTS_KEY,
+        JSON.stringify(rejectedEventIds)
+      );
+      console.log(
+        "💾 Saved rejected events to AsyncStorage:",
+        rejectedEventIds.length
+      );
+    } catch (error) {
+      console.error("❌ Error saving rejected events:", error);
+    }
+  };
+
+  // Clear all swipe data (useful for testing or reset functionality)
+  const clearSwipeData = async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(LIKED_EVENTS_KEY),
+        AsyncStorage.removeItem(REJECTED_EVENTS_KEY),
+      ]);
+      setLikedEvents([]);
+      setRejectedEvents([]);
+      console.log("🗑️ Cleared all swipe data");
+    } catch (error) {
+      console.error("❌ Error clearing swipe data:", error);
+    }
+  };
+
+  // Load events and swipe data on component mount
   useEffect(() => {
-    const loadEvents = async () => {
+    const loadData = async () => {
       try {
-        // Get events from the data store
+        // Load swipe data first
+        await loadSwipeData();
+
+        // Then load events
         const fetchedEvents = await getAllEvents();
 
-        // For Discover, we want to show events with more details
-        // so we map them to the required format
         const formattedEvents = fetchedEvents.map((event) => ({
           id: event.id,
           title: event.title,
           date: event.date,
           location: event.location,
-          description: "", // This field is missing in getAllEvents return type
+          description: event.description || "",
           imageUrl: event.imageUrl,
-          distance: "1.2 miles", // This is hardcoded for now, could be calculated based on user location
+          distance: "1.2 miles",
         }));
 
         setEvents(formattedEvents);
+        console.log("📊 Loaded events:", formattedEvents.length);
       } catch (error) {
-        console.error("Error loading events:", error);
+        console.error("Error loading data:", error);
         setEvents([]);
       } finally {
         setLoading(false);
       }
     };
 
-    loadEvents();
+    loadData();
   }, []);
 
-  // Debug useEffect to track state changes in liked and rejected events
+  // Save liked events whenever they change
   useEffect(() => {
+    if (likedEvents.length > 0) {
+      saveLikedEvents(likedEvents);
+    }
     console.log("🟢 Liked events array updated:", likedEvents);
   }, [likedEvents]);
 
+  // Save rejected events whenever they change
   useEffect(() => {
+    if (rejectedEvents.length > 0) {
+      saveRejectedEvents(rejectedEvents);
+    }
     console.log("🔴 Rejected events array updated:", rejectedEvents);
   }, [rejectedEvents]);
 
-  // Reset state when events data changes
-  useEffect(() => {
-    if (events.length > 0) {
-      setLikedEvents([]);
-      setRejectedEvents([]);
-    }
-  }, [events]);
+  // Filter out events that have already been swiped on
+  const getAvailableEvents = (): EventData[] => {
+    const swipedEventIds = [...likedEvents, ...rejectedEvents];
+    const availableEvents = events.filter(
+      (event) => !swipedEventIds.includes(event.id)
+    );
+
+    console.log("🎯 Available events for swiping:", {
+      total: events.length,
+      liked: likedEvents.length,
+      rejected: rejectedEvents.length,
+      available: availableEvents.length,
+    });
+
+    return availableEvents;
+  };
 
   // Handle swipe right (like)
   const handleSwipeRight = (item: EventData) => {
     console.log("✅ Liked event:", item.id, item.title);
-    // Make sure we don't add duplicates
-    if (!likedEvents.includes(item.id)) {
-      setLikedEvents((prev) => [...prev, item.id]);
-    }
+
+    setLikedEvents((prev) => {
+      if (!prev.includes(item.id)) {
+        return [...prev, item.id];
+      }
+      return prev;
+    });
+
+    // Remove from rejected if it was previously rejected
+    setRejectedEvents((prev) => prev.filter((id) => id !== item.id));
   };
 
   // Handle swipe left (reject)
   const handleSwipeLeft = (item: EventData) => {
     console.log("❌ Rejected event:", item.id, item.title);
-    // Make sure we don't add duplicates
-    if (!rejectedEvents.includes(item.id)) {
-      setRejectedEvents((prev) => [...prev, item.id]);
-    }
+
+    setRejectedEvents((prev) => {
+      if (!prev.includes(item.id)) {
+        return [...prev, item.id];
+      }
+      return prev;
+    });
+
+    // Remove from liked if it was previously liked
+    setLikedEvents((prev) => prev.filter((id) => id !== item.id));
   };
 
   // Handle view liked events button press
@@ -113,6 +221,8 @@ export default function DiscoverScreen() {
 
   // Render when no more cards
   const renderNoMoreCards = () => {
+    const totalSwipedEvents = likedEvents.length + rejectedEvents.length;
+
     return (
       <View style={styles.noMoreCardsContainer}>
         <Ionicons name="calendar-outline" size={80} color={colors.icon} />
@@ -138,6 +248,22 @@ export default function DiscoverScreen() {
           You&apos;ve seen all events in your area. Check back later for new
           ones!
         </Text>
+
+        {totalSwipedEvents > 0 && (
+          <Text
+            style={[
+              Typography.caption,
+              {
+                color: colors.icon,
+                marginTop: 10,
+                textAlign: "center",
+              },
+            ]}
+          >
+            You've swiped on {totalSwipedEvents} events
+          </Text>
+        )}
+
         {likedEvents.length > 0 && (
           <TouchableOpacity
             style={[styles.viewLikedButton, { backgroundColor: colors.tint }]}
@@ -184,6 +310,9 @@ export default function DiscoverScreen() {
     );
   }
 
+  // Get available events (excluding already swiped ones)
+  const availableEvents = getAvailableEvents();
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
@@ -201,6 +330,15 @@ export default function DiscoverScreen() {
           >
             Swipe to find events near you
           </Text>
+
+          {/* Show swipe progress */}
+          {events.length > 0 && (
+            <Text
+              style={[Typography.caption, { color: colors.icon, marginTop: 4 }]}
+            >
+              {availableEvents.length} of {events.length} events remaining
+            </Text>
+          )}
         </View>
 
         {likedEvents.length > 0 && (
@@ -220,7 +358,7 @@ export default function DiscoverScreen() {
 
       <View style={styles.swipeContainer}>
         <SwipeCard
-          data={events}
+          data={availableEvents} // Only show events that haven't been swiped
           onSwipeRight={handleSwipeRight}
           onSwipeLeft={handleSwipeLeft}
           renderNoMoreCards={renderNoMoreCards}
@@ -272,5 +410,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 10,
+  },
+  debugButton: {
+    marginTop: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
   },
 });

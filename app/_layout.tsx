@@ -12,6 +12,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 import "react-native-reanimated";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Import our custom fonts
 import {
@@ -27,6 +28,7 @@ import {
 } from "@expo-google-fonts/playfair-display";
 
 import Auth from "../components/Auth";
+import { Colors } from "../constants/Colors";
 import { useColorScheme } from "../hooks/useColorScheme";
 import { supabase } from "../lib/supabase";
 
@@ -35,6 +37,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme === "dark" ? "dark" : "light"];
   const [session, setSession] = useState<Session | null>(null);
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
@@ -76,23 +79,39 @@ export default function RootLayout() {
   // Show auth screen if not authenticated
   if (!session) {
     return (
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <View style={{ flex: 1 }}>
-          <Auth />
-        </View>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <SafeAreaProvider>
+          <ThemeProvider
+            value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+          >
+            <Auth />
+            <StatusBar
+              style={colorScheme === "dark" ? "light" : "dark"}
+              backgroundColor={colors.background}
+            />
+          </ThemeProvider>
+        </SafeAreaProvider>
+      </View>
     );
   }
 
   // Show main app if authenticated
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <SafeAreaProvider>
+        <ThemeProvider
+          value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
+        >
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+          <StatusBar
+            style={colorScheme === "dark" ? "light" : "dark"}
+            backgroundColor={colors.background}
+          />
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </View>
   );
 }
