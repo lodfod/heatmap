@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useState } from "react";
 import {
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -60,6 +61,7 @@ export default function ProfileScreen() {
   // Profile state
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [profileTextInput, setProfileTextInput] = useState("");
   const [nameInput, setNameInput] = useState("");
@@ -69,11 +71,9 @@ export default function ProfileScreen() {
     console.log("RSVP for event:", id);
   };
 
-  // Load user profile
-  useEffect(() => {
-    const fetchProfile = async () => {
-      setLoading(true);
-
+  // Load user profile function (extracted for reuse)
+  const fetchProfile = async () => {
+    try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -93,12 +93,36 @@ export default function ProfileScreen() {
           setProfileTextInput(data.profile_text || "");
         }
       }
+    } catch (error) {
+      console.error("Error loading profile:", error);
+    }
+  };
 
+  // Initial load
+  useEffect(() => {
+    const loadProfile = async () => {
+      setLoading(true);
+      await fetchProfile();
       setLoading(false);
     };
 
-    fetchProfile();
+    loadProfile();
   }, []);
+
+  // Handle pull to refresh
+  const onRefresh = async () => {
+    console.log("🔄 Refreshing profile...");
+    setRefreshing(true);
+
+    try {
+      await fetchProfile();
+      console.log("✅ Profile refreshed successfully");
+    } catch (error) {
+      console.error("❌ Error refreshing profile:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Handle profile photo update
   const handleProfilePhotoUpdate = (newImageUrl: string) => {
@@ -154,6 +178,17 @@ export default function ProfileScreen() {
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.tint} // Color of the refresh indicator
+          title="Pull to refresh profile" // iOS only
+          titleColor={colors.text} // iOS only
+          colors={[colors.tint]} // Android only - array of colors
+          progressBackgroundColor={colors.cardBackground} // Android only
+        />
+      }
     >
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
 
