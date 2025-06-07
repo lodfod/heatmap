@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
 import { EventForm, EventFormData } from "../../components/EventForm";
 import { ImagePickerComponent } from "../../components/ImagePickerComponent";
@@ -18,6 +18,21 @@ export default function CreateEventScreen() {
   // State for the event cover image
   const [coverImage, setCoverImage] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formKey, setFormKey] = useState(0); // Add key to force form reset
+
+  // Ref for ImagePickerComponent
+  const imagePickerRef = useRef<any>(null);
+
+  // Reset form when screen comes back into focus
+  useFocusEffect(
+    useCallback(() => {
+      // If we're returning to this screen and form is in submitting state, reset it
+      if (isSubmitting) {
+        console.log("🔄 Screen focused and form was submitting, resetting...");
+        resetForm();
+      }
+    }, [isSubmitting])
+  );
 
   // Fixed upload function using FormData for React Native compatibility
   const uploadImageToStorage = async (imageUri: string): Promise<string> => {
@@ -122,6 +137,19 @@ export default function CreateEventScreen() {
     // Create date object and convert to ISO string
     const eventDate = new Date(year, month - 1, day, hours, minutes);
     return eventDate.toISOString();
+  };
+
+  // Function to reset the entire form
+  const resetForm = () => {
+    console.log("🔄 Resetting form...");
+    setCoverImage("");
+    setIsSubmitting(false);
+    setFormKey((prev) => prev + 1); // Force form to re-render with fresh state
+
+    // Reset image picker if it has a reset method
+    if (imagePickerRef.current && imagePickerRef.current.reset) {
+      imagePickerRef.current.reset();
+    }
   };
 
   // Handle form submission
@@ -234,6 +262,9 @@ export default function CreateEventScreen() {
         insertData.imageUrl
       );
 
+      // IMPORTANT: Reset form state immediately after successful creation
+      resetForm();
+
       // Show success message
       Alert.alert(
         "Event Created",
@@ -241,14 +272,15 @@ export default function CreateEventScreen() {
         [
           {
             text: "View Event",
-            onPress: () => router.push(`/event/${insertData.id}`),
+            onPress: () => {
+              router.push(`/event/${insertData.id}`);
+            },
           },
           {
             text: "Create Another",
             onPress: () => {
-              // Reset the form
-              setCoverImage("");
-              setIsSubmitting(false);
+              // Form is already reset, but force re-render just in case
+              setFormKey((prev) => prev + 1);
             },
           },
         ]
@@ -256,11 +288,14 @@ export default function CreateEventScreen() {
     } catch (error) {
       console.error("❌ Error creating event:", error);
 
+      // Reset submitting state on error
+      setIsSubmitting(false);
+
       // Show error message
       Alert.alert(
         "Error",
         "There was a problem creating your event. Please try again.",
-        [{ text: "OK", onPress: () => setIsSubmitting(false) }]
+        [{ text: "OK" }]
       );
     }
   };
@@ -308,6 +343,8 @@ export default function CreateEventScreen() {
         {/* Cover Image Picker */}
         <View style={styles.imagePickerContainer}>
           <ImagePickerComponent
+            ref={imagePickerRef}
+            key={`image-picker-${formKey}`} // Force re-render when form resets
             onImageSelected={handleImageSelected}
             label="Event Cover Image"
           />
@@ -332,8 +369,10 @@ export default function CreateEventScreen() {
 
         {/* Event Form */}
         <EventForm
+          key={`event-form-${formKey}`} // Force re-render when form resets
           onSubmit={handleSubmit}
           submitButtonLabel={isSubmitting ? "Creating..." : "Create Event"}
+          disabled={isSubmitting} // Disable form while submitting
         />
       </View>
     </View>

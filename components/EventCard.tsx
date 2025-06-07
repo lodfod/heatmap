@@ -1,3 +1,13 @@
+import {
+  format,
+  isThisWeek,
+  isThisYear,
+  isToday,
+  isTomorrow,
+  isValid,
+  parse,
+  parseISO,
+} from "date-fns";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React from "react";
@@ -16,12 +26,75 @@ import { useColorScheme } from "../hooks/useColorScheme";
 export interface EventCardProps {
   id: string;
   title: string;
-  date: string;
+  date: string; // This should be an ISO string from Supabase
   location: string;
   imageUrl: string;
   attendees?: number;
   onRSVP?: (id: string) => void;
 }
+
+// Enhanced helper function to format dates with better error handling
+const formatEventDate = (dateString: string): string => {
+  // Handle null, undefined, or empty strings
+  if (!dateString || dateString.trim() === "" || dateString === "Date TBD") {
+    return "Date TBD";
+  }
+
+  try {
+    let date: Date;
+
+    console.log("📅 Formatting date string:", dateString);
+
+    // Try parsing as ISO string first (most common from Supabase)
+    date = parseISO(dateString);
+
+    // If parseISO fails, try other common formats
+    if (!isValid(date)) {
+      // Try parsing as JavaScript Date string
+      date = new Date(dateString);
+    }
+
+    // If still invalid, try parsing common date formats
+    if (!isValid(date)) {
+      // Try MM/DD/YYYY format
+      const mmddyyyy = parse(dateString, "MM/dd/yyyy", new Date());
+      if (isValid(mmddyyyy)) {
+        date = mmddyyyy;
+      } else {
+        // Try YYYY-MM-DD format
+        const yyyymmdd = parse(dateString, "yyyy-MM-dd", new Date());
+        if (isValid(yyyymmdd)) {
+          date = yyyymmdd;
+        }
+      }
+    }
+
+    // Final validation
+    if (!isValid(date)) {
+      console.warn("❌ Could not parse date:", dateString);
+      return dateString; // Return original string as fallback
+    }
+
+    console.log("✅ Successfully parsed date:", date);
+
+    // Format based on how close the date is
+    if (isToday(date)) {
+      return `Today at ${format(date, "h:mm a")}`;
+    } else if (isTomorrow(date)) {
+      return `Tomorrow at ${format(date, "h:mm a")}`;
+    } else if (isThisWeek(date)) {
+      return format(date, "EEEE 'at' h:mm a"); // "Monday at 7:30 PM"
+    } else if (isThisYear(date)) {
+      return format(date, "MMM d 'at' h:mm a"); // "Dec 25 at 7:30 PM"
+    } else {
+      return format(date, "MMM d, yyyy 'at' h:mm a"); // "Dec 25, 2024 at 7:30 PM"
+    }
+  } catch (error) {
+    console.error("❌ Error formatting date:", error);
+    console.error("❌ Original date string:", dateString);
+    return dateString; // Fallback to original string
+  }
+};
 
 export function EventCard({
   id,
@@ -39,6 +112,9 @@ export function EventCard({
   // Ensure we have a valid image URL
   const validImageUrl =
     imageUrl || "https://images.unsplash.com/photo-1492684223066-81342ee5ff30";
+
+  // Format the date for display
+  const formattedDate = formatEventDate(date);
 
   // Navigate to the event details page
   const handlePress = () => {
@@ -82,7 +158,7 @@ export function EventCard({
         </Text>
 
         <Text style={[Typography.eventDate, { color: colors.accent1 }]}>
-          {date}
+          {formattedDate}
         </Text>
 
         <Text
