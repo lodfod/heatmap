@@ -135,35 +135,11 @@ export default function ProfileScreen() {
             {mockUser.name}
           </Text>
 
-          <Text style={[Typography.bodyMedium, { color: colors.accent1 }]}>
-            @{mockUser.username}
-          </Text>
-
           <Text
             style={[Typography.bodySmall, { color: colors.text, marginTop: 8 }]}
           >
             {mockUser.bio}
           </Text>
-
-          <View style={styles.followInfo}>
-            <View style={styles.followItem}>
-              <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                {mockUser.followers}
-              </Text>
-              <Text style={[Typography.caption, { color: colors.icon }]}>
-                Followers
-              </Text>
-            </View>
-
-            <View style={styles.followItem}>
-              <Text style={[Typography.headingSmall, { color: colors.text }]}>
-                {mockUser.following}
-              </Text>
-              <Text style={[Typography.caption, { color: colors.icon }]}>
-                Following
-              </Text>
-            </View>
-          </View>
         </View>
       </View>
 
@@ -181,57 +157,6 @@ export default function ProfileScreen() {
           Edit Profile
         </Text>
       </TouchableOpacity>
-
-      {/* Friend Suggestions */}
-      <View style={styles.sectionContainer}>
-        <Text style={[Typography.headingSmall, { color: colors.text }]}>
-          People You May Know
-        </Text>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.friendsScrollView}
-        >
-          {friendSuggestions.map((friend) => (
-            <View
-              key={friend.id}
-              style={[
-                styles.friendCard,
-                { backgroundColor: colors.cardBackground },
-              ]}
-            >
-              <Image
-                source={{ uri: friend.image }}
-                style={styles.friendImage}
-                resizeMode="cover"
-              />
-
-              <Text
-                style={[
-                  Typography.bodyMedium,
-                  { color: colors.text, marginTop: 8 },
-                ]}
-                numberOfLines={1}
-              >
-                {friend.name}
-              </Text>
-
-              <Text style={[Typography.caption, { color: colors.icon }]}>
-                {friend.mutualFriends} mutual friends
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.followButton, { backgroundColor: colors.tint }]}
-              >
-                <Text style={[Typography.buttonSmall, { color: "#FFF" }]}>
-                  Follow
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
 
       {/* Events Tabs */}
       <View style={styles.tabContainer}>
