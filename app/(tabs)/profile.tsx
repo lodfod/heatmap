@@ -1,6 +1,7 @@
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   ScrollView,
@@ -14,15 +15,12 @@ import { EventCard } from "../../components/EventCard";
 import { Colors } from "../../constants/Colors";
 import { Typography } from "../../constants/Typography";
 import { useColorScheme } from "../../hooks/useColorScheme";
-
 // Mock user data
 const mockUser = {
   name: "Alex Johnson",
   username: "alex_j",
   profileImage: "https://images.unsplash.com/photo-1494790108377-be9c29b29330",
   bio: "Stanford CS '25 | Love exploring new places and meeting new people",
-  followers: 184,
-  following: 245,
 };
 
 // Mock events data
@@ -34,15 +32,7 @@ const mockCreatedEvents = [
     location: "Italian Homemade Company",
     imageUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
     attendees: 12,
-  },
-  {
-    id: "202",
-    title: "Study Group: AI Fundamentals",
-    date: "Tuesday, Jun 4, 2023 • 4:00 PM",
-    location: "Green Library",
-    imageUrl: "https://images.unsplash.com/photo-1519389950473-47ba0277781c",
-    attendees: 6,
-  },
+  }
 ];
 
 const mockAttendingEvents = [
@@ -53,51 +43,7 @@ const mockAttendingEvents = [
     location: "Frost Amphitheater",
     imageUrl: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3",
     attendees: 124,
-  },
-  {
-    id: "302",
-    title: "Hackathon 2023",
-    date: "Friday-Sunday, Jun 14-16, 2023",
-    location: "Huang Engineering Center",
-    imageUrl: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678",
-    attendees: 78,
-  },
-  {
-    id: "303",
-    title: "Job Fair: Tech Companies",
-    date: "Wednesday, Jun 12, 2023 • 11:00 AM",
-    location: "Tresidder Union",
-    imageUrl: "https://images.unsplash.com/photo-1560439513-74b037a25d84",
-    attendees: 250,
-  },
-];
-
-// Friend suggestion mock data
-const friendSuggestions = [
-  {
-    id: "1",
-    name: "Emma Wilson",
-    image: "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
-    mutualFriends: 4,
-  },
-  {
-    id: "2",
-    name: "Michael Brown",
-    image: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d",
-    mutualFriends: 3,
-  },
-  {
-    id: "3",
-    name: "Sophia Chen",
-    image: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2",
-    mutualFriends: 5,
-  },
-  {
-    id: "4",
-    name: "David Kim",
-    image: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e",
-    mutualFriends: 2,
-  },
+  }
 ];
 
 type TabType = "created" | "attending";
@@ -114,6 +60,35 @@ export default function ProfileScreen() {
   const handleRSVP = (id: string) => {
     console.log("RSVP for event:", id);
   };
+
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+  const fetchProfile = async () => {
+    setLoading(true);
+    
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (user) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      if (error) {
+        console.error("Error fetching profile:", error);
+      } else {
+        setUserProfile(data);
+      }
+    }
+
+    setLoading(false);
+  };
+
+  fetchProfile();
+}, []);
 
   return (
     <ScrollView
@@ -132,13 +107,13 @@ export default function ProfileScreen() {
 
         <View style={styles.profileInfo}>
           <Text style={[Typography.headingMedium, { color: colors.text }]}>
-            {mockUser.name}
+            {userProfile?.name ||mockUser.name}
           </Text>
 
           <Text
             style={[Typography.bodySmall, { color: colors.text, marginTop: 8 }]}
           >
-            {mockUser.bio}
+            {userProfile?.profile_text || mockUser.bio}
           </Text>
         </View>
       </View>
